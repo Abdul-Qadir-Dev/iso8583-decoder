@@ -1,0 +1,149 @@
+# Generic ISO 8583:1987 field layout, public specification only.
+# Not derived from any specific processor's internal implementation.
+#
+# Scoped to what's needed to decode authorization request/response,
+# reversal, and network management messages. Fields not listed here
+# (e.g. 48, 55, 60-63 private-use/EMV/TLV blocks) are intentionally
+# out of scope for v1 -- see README limitations.
+
+variant: "1987"
+name: "generic-1987"
+
+fields:
+  2:
+    name: "Primary Account Number"
+    data_type: n
+    length_type: variable
+    length_digits: 2
+  3:
+    name: "Processing Code"
+    data_type: n
+    length_type: fixed
+    length: 6
+  4:
+    name: "Amount, Transaction"
+    data_type: n
+    length_type: fixed
+    length: 12
+    format_hint: amount_minor_units
+  7:
+    name: "Transmission Date and Time"
+    data_type: n
+    length_type: fixed
+    length: 10
+  11:
+    name: "System Trace Audit Number"
+    data_type: n
+    length_type: fixed
+    length: 6
+  12:
+    name: "Local Transaction Time"
+    data_type: n
+    length_type: fixed
+    length: 6
+    format_hint: time_hhmmss
+  13:
+    name: "Local Transaction Date"
+    data_type: n
+    length_type: fixed
+    length: 4
+    format_hint: date_mmdd
+  14:
+    name: "Expiration Date"
+    data_type: n
+    length_type: fixed
+    length: 4
+    format_hint: expiry_yymm
+  22:
+    name: "Point of Service Entry Mode"
+    data_type: n
+    length_type: fixed
+    length: 3
+  25:
+    name: "Point of Service Condition Code"
+    data_type: n
+    length_type: fixed
+    length: 2
+  32:
+    name: "Acquiring Institution ID Code"
+    data_type: n
+    length_type: variable
+    length_digits: 2
+  35:
+    name: "Track 2 Data"
+    data_type: z
+    length_type: variable
+    length_digits: 2
+  37:
+    name: "Retrieval Reference Number"
+    data_type: an
+    length_type: fixed
+    length: 12
+  38:
+    name: "Authorization ID Response"
+    data_type: an
+    length_type: fixed
+    length: 6
+  39:
+    name: "Response Code"
+    data_type: an
+    length_type: fixed
+    length: 2
+    value_map:
+      "00": "Approved"
+      "01": "Refer to card issuer"
+      "03": "Invalid merchant"
+      "04": "Pickup card"
+      "05": "Do not honor"
+      "12": "Invalid transaction"
+      "13": "Invalid amount"
+      "14": "Invalid card number"
+      "30": "Format error"
+      "41": "Lost card, pickup"
+      "43": "Stolen card, pickup"
+      "51": "Insufficient funds"
+      "54": "Expired card"
+      "55": "Incorrect PIN"
+      "57": "Transaction not permitted to cardholder"
+      "58": "Transaction not permitted to terminal"
+      "61": "Exceeds withdrawal amount limit"
+      "62": "Restricted card"
+      "65": "Exceeds withdrawal frequency limit"
+      "75": "Allowable number of PIN tries exceeded"
+      "91": "Issuer or switch inoperative"
+      "96": "System malfunction"
+  41:
+    name: "Card Acceptor Terminal ID"
+    data_type: ans
+    length_type: fixed
+    length: 8
+  42:
+    name: "Card Acceptor ID Code"
+    data_type: ans
+    length_type: fixed
+    length: 15
+  49:
+    name: "Currency Code, Transaction"
+    data_type: n
+    length_type: fixed
+    length: 3
+  52:
+    name: "PIN Data"
+    data_type: b
+    length_type: fixed
+    length: 8
+  70:
+    name: "Network Management Information Code"
+    data_type: n
+    length_type: fixed
+    length: 3
+  90:
+    name: "Original Data Elements"
+    data_type: n
+    length_type: fixed
+    length: 42
+  128:
+    name: "Message Authentication Code"
+    data_type: b
+    length_type: fixed
+    length: 8
