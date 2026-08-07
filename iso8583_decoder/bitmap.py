@@ -61,6 +61,7 @@ def _flag_unknown_fields(fields: list[int], known_fields: set[int], diagnostics:
 
 
 def _stopped(
+    code: str,
     reason: str,
     diagnostics: list[Diagnostic],
     primary_hex: str,
@@ -68,7 +69,7 @@ def _stopped(
     present_fields: list[int] | None = None,
     consumed_chars: int = 0,
 ) -> BitmapResult:
-    diagnostics.append(Diagnostic(code="bitmap_parsing_stopped", message=reason))
+    diagnostics.append(Diagnostic(code=code, message=reason))
     return BitmapResult(
         present_fields=present_fields or [],
         primary_hex=primary_hex,
@@ -88,6 +89,7 @@ def parse_bitmap(remaining: str, known_fields: set[int]) -> BitmapResult:
 
     if len(remaining) < 16:
         return _stopped(
+            "bitmap_primary_too_short",
             "message is too short to contain a primary bitmap (need 16 hex characters)",
             diagnostics, primary_hex=remaining,
         )
@@ -95,6 +97,7 @@ def parse_bitmap(remaining: str, known_fields: set[int]) -> BitmapResult:
     primary_hex = remaining[:16]
     if not _is_hex(primary_hex):
         return _stopped(
+            "bitmap_primary_non_hex",
             "primary bitmap contains non-hex characters, field offsets can't be trusted",
             diagnostics, primary_hex=primary_hex,
         )
@@ -113,6 +116,7 @@ def parse_bitmap(remaining: str, known_fields: set[int]) -> BitmapResult:
     tail = remaining[16:32]
     if len(tail) < 16:
         return _stopped(
+            "bitmap_secondary_missing",
             "bit 1 indicated a secondary bitmap, but the message doesn't contain one; "
             "field offsets from here on can't be trusted",
             diagnostics, primary_hex=primary_hex, present_fields=present_fields, consumed_chars=16,
@@ -120,6 +124,7 @@ def parse_bitmap(remaining: str, known_fields: set[int]) -> BitmapResult:
 
     if not _is_hex(tail):
         return _stopped(
+            "bitmap_secondary_non_hex",
             "secondary bitmap contains non-hex characters, field offsets can't be trusted",
             diagnostics, primary_hex=primary_hex, secondary_hex=tail,
             present_fields=present_fields, consumed_chars=16,

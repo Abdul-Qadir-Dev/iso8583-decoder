@@ -1,15 +1,5 @@
 from iso8583_decoder.bitmap import parse_bitmap
-
-
-def _bitmap_hex(present_fields: set[int], base_field: int) -> str:
-    """Build 16 hex chars (64 bits) with the given field numbers set, via plain
-    integer bit-shifting -- deliberately not the nibble-walking approach bitmap.py
-    itself uses, so these tests check something rather than mirroring the code."""
-    value = 0
-    for f in present_fields:
-        bit_index_from_msb = f - base_field
-        value |= 1 << (63 - bit_index_from_msb)
-    return format(value, "016x")
+from tests.hex_helpers import bitmap_hex as _bitmap_hex
 
 
 def test_primary_only_no_secondary_indicated():
@@ -41,7 +31,7 @@ def test_bit1_set_but_secondary_entirely_absent_stops_parsing():
     assert "doesn't contain one" in result.partial_reason
     assert result.present_fields == [2]  # primary was still read successfully
     assert result.consumed_chars == 16
-    assert any(d.code == "bitmap_parsing_stopped" for d in result.diagnostics)
+    assert any(d.code == "bitmap_secondary_missing" for d in result.diagnostics)
 
 
 def test_bit1_set_but_secondary_truncated_stops_parsing():
