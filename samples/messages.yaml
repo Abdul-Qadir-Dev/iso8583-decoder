@@ -1,0 +1,128 @@
+# Sample ISO 8583 messages. All PANs are standard, publicly-documented
+# test card numbers (4111111111111111 Visa, 5555555555554444
+# Mastercard); no real client or production data. Merchant/terminal
+# IDs are synthetic.
+#
+# raw strings are pre-computed and frozen -- see iso8583_decoder/samples.py
+# for why, and how they were authored (built the same way the parser
+# tests build messages, then round-tripped through decode_message() to
+# confirm each one actually produces its declared expected outcome).
+
+- id: auth_request_0100_ascii
+  description: >
+    Authorization request, purchase, USD $42.00, standard test PAN.
+    Fields: 2,3,4,7,11,12,13,22,25,32,37,41,42,49.
+  transaction_type: "0100 authorization request"
+  encoding: ascii
+  raw: '01007238048108c08000164111111111111111000000000000004200080714300000012314300008070510006123456123456789012TERM0001MERCHANT0000001840'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: auth_request_0100_binary
+  description: >
+    The same authorization request as auth_request_0100_ascii, BCD/binary
+    encoded. Used to prove the two encodings agree on identical content,
+    not just that each one runs.
+  transaction_type: "0100 authorization request"
+  encoding: binary
+  raw: '303130307238048108c0800016411111111111111100000000000000420008071430000001231430000807f05100061234563132333435363738393031325445524d303030314d45524348414e5430303030303031f840'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: auth_response_0110
+  description: >
+    Approval response to the 0100 authorization request above. Fields:
+    3,4,7,11,12,13,32,37,38,39,41,42,49.
+  transaction_type: "0110 authorization response"
+  encoding: ascii
+  raw: '0110323800010ec080000000000000000042000807143005000123143005080706123456123456789012AUTH0100TERM0001MERCHANT0000001840'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: financial_request_0200
+  description: >
+    Financial (purchase) request, USD $100.00, standard Mastercard test
+    PAN. Fields: 2,3,4,7,11,12,13,22,25,32,37,41,42,49.
+  transaction_type: "0200 financial request"
+  encoding: ascii
+  raw: '02007238048108c08000165555555555554444000000000000010000080715000000045615000008070510006123456223456789012TERM0002MERCHANT0000002840'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: financial_response_0210
+  description: >
+    Approval response to the 0200 financial request above. Fields:
+    3,4,7,11,12,13,32,37,38,39,41,42,49.
+  transaction_type: "0210 financial response"
+  encoding: ascii
+  raw: '0210323800010ec080000000000000000100000807150004000456150004080706123456223456789012AUTH0200TERM0002MERCHANT0000002840'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: reversal_request_0400
+  description: >
+    Reversal of the 0200 financial request above. Carries field 90
+    (Original Data Elements: original MTI + STAN + transmission
+    date/time + acquiring/forwarding institution IDs).
+  transaction_type: "0400 reversal request"
+  encoding: ascii
+  raw: '0400b238000108c0800000000040000000000000000000000100000807150500000457150500080706123456223456789013TERM0002MERCHANT0000002840020000045608071500000000012345600000000000'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: network_mgmt_echo_0800
+  description: >
+    Network management echo test carrying a MAC (field 128). Fields 70
+    and 128 both live past field 64, so this is the secondary-bitmap
+    sample: bit 1 is set in the primary bitmap and a real secondary
+    bitmap follows it.
+  transaction_type: "0800 network management request"
+  encoding: ascii
+  raw: '0800822000000000000004000000000000010807160000000789301a1b2c3d4e5f6a1b2'
+  expected:
+    partial: false
+    diagnostic_codes: []
+
+- id: malformed_invalid_bcd_data_field
+  description: >
+    Binary-mode message where field 3's BCD-packed data contains two
+    invalid nibbles ('a' and 'b'). The field's byte length is still
+    known, so decoding continues -- diagnostics, not a stop.
+  transaction_type: "0100 authorization request"
+  encoding: binary
+  raw: '303130302000000000000000ab0000'
+  expected:
+    partial: false
+    diagnostic_codes: ["field_invalid_bcd_nibble"]
+
+- id: malformed_invalid_bcd_length_prefix
+  description: >
+    Binary-mode message where field 32's LLVAR length prefix contains
+    invalid BCD. The declared length can't be trusted, so decoding
+    stops rather than guessing at an offset.
+  transaction_type: "0100 authorization request"
+  encoding: binary
+  raw: '303130300000000100000000ab123456'
+  expected:
+    partial: true
+    stopped_at: field_32
+    reason_code: field_length_prefix_invalid_bcd
+    diagnostic_codes: []
+
+- id: malformed_truncated_mid_field
+  description: >
+    ASCII-mode message where field 3 (fixed 6 digits) has only 3
+    characters left in the message. The byte offset up to this point
+    is still known, so this is a diagnostic, not a stop.
+  transaction_type: "0100 authorization request"
+  encoding: ascii
+  raw: '01002000000000000000123'
+  expected:
+    partial: false
+    diagnostic_codes: ["field_fixed_length_exceeds_remaining"]
