@@ -1,4 +1,5 @@
-pydantic==2.9.2
-PyYAML==6.0.2
-fastapi==0.115.14
-uvicorn==0.32.1
+# Installs this project in editable mode, pulling dependency versions
+# from pyproject.toml's [project.dependencies] -- that table is the
+# single source of truth for versions, so there's nothing here to fall
+# out of sync with it.
+-e .

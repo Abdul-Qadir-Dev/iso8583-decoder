@@ -107,6 +107,12 @@ uvicorn iso8583_decoder.api:app --reload
 Then open `http://localhost:8000` for the UI, or `http://localhost:8000/docs`
 for the interactive API docs.
 
+Dependency versions live in one place: `pyproject.toml`'s
+`[project.dependencies]` (runtime) and `[project.optional-dependencies].dev`
+(test/lint tooling). `requirements.txt` and `requirements-dev.txt` just
+install this project itself in editable mode (`-e .` / `-e .[dev]`), so
+there's no second copy of version numbers to keep in sync by hand.
+
 ## Current limitations
 
 - Fields 48, 55, and 60-63 (private-use data and EMV TLV) are in the loaded
@@ -140,9 +146,14 @@ FastAPI support (Vercel looks for a `FastAPI` instance named `app` at a
 supported entrypoint), free, deploys straight from a connected GitHub repo.
 `pyproject.toml`'s `[tool.vercel]` entrypoint points at the existing
 `iso8583_decoder/api.py` app directly rather than adding a duplicate
-entrypoint file. The `Dockerfile` stays in the repo for local use and
-self-hosting -- it isn't used by the Vercel deployment, which builds
-straight from `requirements.txt`.
+entrypoint file.
+
+Vercel's Python runtime installs dependencies with `uv`, reading them from
+`pyproject.toml`'s `[project.dependencies]` -- not from `requirements.txt`,
+which Vercel never looks at. `.python-version` pins the build to 3.11, the
+same version CI runs; without it Vercel defaults to a newer Python than
+this project is tested against. The `Dockerfile` stays in the repo for
+local use and self-hosting -- it isn't used by the Vercel deployment.
 
 Steps to run yourself (account creation isn't something this tool does on
 your behalf):
