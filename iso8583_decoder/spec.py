@@ -57,6 +57,20 @@ class MaskStrategy(str, Enum):
     TRACK_DATA = "track_data"   # a PAN is embedded inside track-format data
 
 
+class BcdPad(str, Enum):
+    """Which end carries the filler nibble when a BCD-packed digit count is odd.
+
+    Binary mode only. Applies to a field's own value when data_type is n,
+    and to the length prefix of any variable-length field regardless of
+    that field's data_type (a length prefix is itself a numeric value).
+    Leading is the common convention; processors differ, so it's a spec
+    property rather than a hardcoded assumption.
+    """
+
+    LEADING = "leading"
+    TRAILING = "trailing"
+
+
 class FieldSpec(BaseModel):
     """One data element's definition.
 
@@ -78,6 +92,7 @@ class FieldSpec(BaseModel):
     length_digits: Optional[int] = None     # set when length_type == variable
     format_hint: FormatHint = FormatHint.NONE
     value_map: dict[str, str] = Field(default_factory=dict)
+    bcd_pad: BcdPad = BcdPad.LEADING
     sensitivity: Sensitivity = Sensitivity.NONE
     mask_strategy: MaskStrategy = MaskStrategy.NONE
 
