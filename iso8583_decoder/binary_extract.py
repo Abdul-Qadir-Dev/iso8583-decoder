@@ -36,7 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import Diagnostic, DiagnosticCode
-from .spec import BcdPad, DataType, FieldSpec, LengthType, MessageSpec
+from .spec import BcdPad, DataType, LengthType, MessageSpec
 
 
 @dataclass

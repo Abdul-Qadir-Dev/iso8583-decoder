@@ -151,6 +151,35 @@ def test_no_response_body_contains_the_input_pan_across_all_samples(client):
         assert PAN not in response.text, f"{sample.id}: PAN leaked into response body"
 
 
+def test_a_diagnostic_firing_on_the_pan_field_itself_does_not_leak_it(client):
+    """The general PAN-leak checks above exercise samples where the malformed
+    field isn't the sensitive one. This constructs a message where field 2
+    (the PAN, masked-sensitivity) itself has an invalid BCD nibble, so the
+    diagnostic pipeline (binary_extract.py, not just render.py in isolation)
+    is what's actually under test here -- confirming no diagnostic message
+    built from a corrupted PAN value reconstructs enough of it to matter."""
+    from tests.hex_helpers import ascii_hex, bitmap_hex, pack_bcd
+
+    corrupted = pack_bcd(PAN)
+    corrupted = corrupted[:4] + "a" + corrupted[5:]  # one invalid nibble mid-PAN
+    body = pack_bcd("16") + corrupted
+    raw = ascii_hex("0100") + bitmap_hex({2}, base_field=1) + body
+
+    response = client.post("/decode", json={"raw": raw, "encoding": "binary"})
+    assert response.status_code == 200
+    body_json = response.json()
+
+    diag = next(d for d in body_json["diagnostics"] if d["code"] == "field_invalid_bcd_nibble")
+    assert diag["field_number"] == 2
+    # the diagnostic message names the single bad nibble, not the surrounding digits
+    assert PAN not in diag["message"]
+    assert PAN[:6] not in diag["message"] and PAN[-4:] not in diag["message"]
+
+    # the corrupted field value in the response is masked by default too
+    field_2 = next(f for f in body_json["fields"] if f["field_number"] == 2)
+    assert PAN not in field_2["raw"]
+
+
 def test_no_log_line_contains_the_input_pan(client, caplog):
     sample = next(s for s in load_samples() if s.id == "auth_request_0100_ascii")
     with caplog.at_level(logging.DEBUG):
