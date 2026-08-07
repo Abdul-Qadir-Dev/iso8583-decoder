@@ -10,6 +10,14 @@ rest of a message that has one bad digit in the MTI.
 A completely malformed MTI (wrong length, non-numeric) is different:
 there's no position to read a "reserved value" from, so that raises
 instead of producing a best-effort result.
+
+The four per-position meaning tables (version/class/function/origin)
+are loaded from spec/mti_meanings.yaml rather than kept as Python dict
+literals -- they're value maps like everything else this decoder
+interprets, so they're data. The *structural* decode -- which digit
+position means what, walking them and building the plain-language
+summary -- stays as code here, since that's standard-level logic, not
+data a processor spec would swap out.
 """
 
 from __future__ import annotations
@@ -17,50 +25,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .diagnostics import Diagnostic
+import yaml
+
+from .diagnostics import Diagnostic, DiagnosticCode
 from .spec import MessageSpec, load_spec
 
-VERSION_MEANINGS = {
-    "0": "1987",
-    "1": "1993",
-    "2": "1998",
-    "9": "private use",
-}
+DEFAULT_SPEC_DIR = Path(__file__).resolve().parent.parent / "spec"
+_MEANINGS_PATH = DEFAULT_SPEC_DIR / "mti_meanings.yaml"
 
-CLASS_MEANINGS = {
-    "1": "Authorization",
-    "2": "Financial",
-    "3": "File action",
-    "4": "Reversal/chargeback",
-    "5": "Reconciliation",
-    "6": "Administrative",
-    "7": "Fee collection",
-    "8": "Network management",
-}
-
-FUNCTION_MEANINGS = {
-    "0": "Request",
-    "1": "Request response",
-    "2": "Advice",
-    "3": "Advice response",
-    "4": "Notification",
-}
-
-ORIGIN_MEANINGS = {
-    "0": "Acquirer",
-    "1": "Acquirer repeat",
-    "2": "Issuer",
-    "3": "Issuer repeat",
-    "4": "Other",
-}
+_meanings = yaml.safe_load(_MEANINGS_PATH.read_text(encoding="utf-8"))
+VERSION_MEANINGS: dict[str, str] = _meanings["version"]
+CLASS_MEANINGS: dict[str, str] = _meanings["message_class"]
+FUNCTION_MEANINGS: dict[str, str] = _meanings["function"]
+ORIGIN_MEANINGS: dict[str, str] = _meanings["origin"]
 
 # Which spec file backs each MTI version digit. Only 1987 exists so far;
 # looking up an unmapped version raises a clear error, not a KeyError.
 VERSION_SPEC_FILES = {
     "0": "1987_generic.yaml",
 }
-
-DEFAULT_SPEC_DIR = Path(__file__).resolve().parent.parent / "spec"
 
 
 class MtiFormatError(ValueError):
@@ -94,19 +77,21 @@ def decode_mti(raw: str) -> MtiDecodeResult:
 
     diagnostics: list[Diagnostic] = []
 
-    def decode_component(digit: str, table: dict[str, str], label: str) -> MtiComponent:
+    def decode_component(digit: str, table: dict[str, str], label: str, code: DiagnosticCode, offset: int) -> MtiComponent:
         meaning = table.get(digit)
         if meaning is None:
             diagnostics.append(Diagnostic(
-                code=f"mti_unknown_{label}",
+                code=code,
                 message=f"MTI {label} digit {digit!r} is reserved/unknown",
+                field_number=None,
+                byte_offset=offset,  # MTI is always the first 4 bytes of any message
             ))
         return MtiComponent(digit=digit, meaning=meaning)
 
-    version = decode_component(raw[0], VERSION_MEANINGS, "version")
-    message_class = decode_component(raw[1], CLASS_MEANINGS, "class")
-    function = decode_component(raw[2], FUNCTION_MEANINGS, "function")
-    origin = decode_component(raw[3], ORIGIN_MEANINGS, "origin")
+    version = decode_component(raw[0], VERSION_MEANINGS, "version", DiagnosticCode.MTI_UNKNOWN_VERSION, 0)
+    message_class = decode_component(raw[1], CLASS_MEANINGS, "class", DiagnosticCode.MTI_UNKNOWN_CLASS, 1)
+    function = decode_component(raw[2], FUNCTION_MEANINGS, "function", DiagnosticCode.MTI_UNKNOWN_FUNCTION, 2)
+    origin = decode_component(raw[3], ORIGIN_MEANINGS, "origin", DiagnosticCode.MTI_UNKNOWN_ORIGIN, 3)
 
     return MtiDecodeResult(
         raw=raw,

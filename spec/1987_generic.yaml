@@ -33,6 +33,7 @@ fields:
     data_type: n
     length_type: fixed
     length: 10
+    format_hint: datetime_mmddhhmmss
   11:
     name: "System Trace Audit Number"
     data_type: n
@@ -61,11 +62,26 @@ fields:
     data_type: n
     length_type: fixed
     length: 3
+    value_map:
+      "000": "Unknown / not specified"
+      "010": "Manual key entry"
+      "020": "Magnetic stripe read"
+      "050": "Integrated circuit card (chip), CVV not checked"
+      "051": "Integrated circuit card (chip), CVV checked"
+      "070": "Contactless chip"
+      "810": "Contactless magnetic stripe"
   25:
     name: "Point of Service Condition Code"
     data_type: n
     length_type: fixed
     length: 2
+    value_map:
+      "00": "Normal presentment"
+      "01": "Customer not present"
+      "02": "Unattended terminal"
+      "03": "Merchant suspicious"
+      "08": "Mail/telephone order"
+      "59": "Suspected fraud"
   32:
     name: "Acquiring Institution ID Code"
     data_type: n

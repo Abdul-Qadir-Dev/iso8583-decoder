@@ -1,0 +1,38 @@
+# Per-digit-position meanings for MTI decoding. These are ISO 8583
+# standard-level semantics (not a processor's field layout), so they
+# don't vary per spec file the way FieldSpec entries do -- but they're
+# still data, not code, so they live here rather than as Python dict
+# literals, same as everything else this decoder interprets.
+#
+# The structural walk (which digit means what, building the plain-
+# language summary) stays in mti.py -- only the value maps moved.
+
+version:
+  "0": "1987"
+  "1": "1993"
+  "2": "1998"
+  "9": "private use"
+
+message_class:
+  "1": "Authorization"
+  "2": "Financial"
+  "3": "File action"
+  "4": "Reversal/chargeback"
+  "5": "Reconciliation"
+  "6": "Administrative"
+  "7": "Fee collection"
+  "8": "Network management"
+
+function:
+  "0": "Request"
+  "1": "Request response"
+  "2": "Advice"
+  "3": "Advice response"
+  "4": "Notification"
+
+origin:
+  "0": "Acquirer"
+  "1": "Acquirer repeat"
+  "2": "Issuer"
+  "3": "Issuer repeat"
+  "4": "Other"

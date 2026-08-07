@@ -12,6 +12,16 @@ from iso8583_decoder.mti import (
 )
 
 
+def test_reserved_digit_diagnostics_carry_byte_offset_and_no_field_number():
+    # MTI isn't a numbered field, so field_number is None; byte_offset is the
+    # digit's own position (0-3), always known since MTI is always 4 bytes first
+    result = decode_mti("0090")  # class digit '0' at index 1, function '9' at index 2
+    by_code = {d.code: d for d in result.diagnostics}
+    assert by_code["mti_unknown_class"].field_number is None
+    assert by_code["mti_unknown_class"].byte_offset == 1
+    assert by_code["mti_unknown_function"].byte_offset == 2
+
+
 def test_0100_reads_as_authorization_request_from_acquirer():
     result = decode_mti("0100")
     assert result.summary == "Authorization request from acquirer"

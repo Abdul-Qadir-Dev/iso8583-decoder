@@ -31,7 +31,8 @@ def test_bit1_set_but_secondary_entirely_absent_stops_parsing():
     assert "doesn't contain one" in result.partial_reason
     assert result.present_fields == [2]  # primary was still read successfully
     assert result.consumed_chars == 16
-    assert any(d.code == "bitmap_secondary_missing" for d in result.diagnostics)
+    stop_diag = next(d for d in result.diagnostics if d.code == "bitmap_secondary_missing")
+    assert stop_diag.byte_offset == 16  # where the secondary block was expected to start
 
 
 def test_bit1_set_but_secondary_truncated_stops_parsing():
@@ -48,7 +49,9 @@ def test_bit65_tertiary_indicator_flags_but_does_not_stop():
     result = parse_bitmap(primary + secondary, known_fields={2})
     assert result.partial is False
     assert result.present_fields == [2]  # bit 65 is a control bit, not a data field
-    assert any(d.code == "bitmap_tertiary_bit_set" for d in result.diagnostics)
+    tertiary = next(d for d in result.diagnostics if d.code == "bitmap_tertiary_bit_set")
+    assert tertiary.field_number == 65
+    assert tertiary.byte_offset == 16  # start of the secondary block, local to this input
 
 
 def test_unknown_field_in_bitmap_is_diagnostic_not_exception():
@@ -56,8 +59,9 @@ def test_unknown_field_in_bitmap_is_diagnostic_not_exception():
     result = parse_bitmap(primary, known_fields=set())  # spec doesn't define field 60
     assert result.partial is False
     assert result.present_fields == [60]
-    codes = [d.code for d in result.diagnostics]
-    assert "bitmap_field_not_in_spec" in codes
+    unknown = next(d for d in result.diagnostics if d.code == "bitmap_field_not_in_spec")
+    assert unknown.field_number == 60
+    assert unknown.byte_offset == 14  # (60-1)//4, local hex-char index within `remaining`
 
 
 def test_non_hex_primary_stops_parsing():
@@ -84,6 +88,7 @@ def test_message_too_short_for_primary_bitmap_stops_parsing():
     assert "too short" in result.partial_reason
     assert result.present_fields == []
     assert result.consumed_chars == 0
+    assert result.diagnostics[-1].byte_offset == 0
 
 
 def test_raw_hex_preserved_verbatim_for_display():

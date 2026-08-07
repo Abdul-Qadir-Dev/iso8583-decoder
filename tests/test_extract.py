@@ -39,8 +39,9 @@ def test_data_type_mismatch_is_diagnostic_not_stop(spec):
     result = extract_fields(body, [3], spec)
     assert result.stop is None
     assert result.decoded_so_far[3] == "ABCDEF"
-    codes = [d.code for d in result.diagnostics]
-    assert "field_data_type_mismatch" in codes
+    mismatch = next(d for d in result.diagnostics if d.code == "field_data_type_mismatch")
+    assert mismatch.field_number == 3
+    assert mismatch.byte_offset == 0  # field 3 starts at the beginning of this body
 
 
 def test_trailing_bytes_after_last_field_is_diagnostic(spec):
@@ -82,3 +83,4 @@ def test_stop_preserves_fields_decoded_before_it(spec):
     result = extract_fields(body, [3, 999], spec)
     assert result.decoded_so_far == {3: "000000"}
     assert result.stop.stopped_at == "field_999"
+    assert result.stop.reason.byte_offset == 6  # right after field 3's 6 characters

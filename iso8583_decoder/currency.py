@@ -23,7 +23,7 @@ from pathlib import Path
 
 import yaml
 
-from .diagnostics import Diagnostic
+from .diagnostics import Diagnostic, DiagnosticCode
 
 DEFAULT_TABLE_PATH = Path(__file__).resolve().parent.parent / "data" / "iso4217_exponents.yaml"
 
@@ -56,8 +56,10 @@ def format_amount(decoded_fields: dict[int, str], exponents: dict[str, int]) -> 
             exponent_used=None,
             assumed=True,
             diagnostics=[Diagnostic(
-                code="amount_currency_missing",
+                code=DiagnosticCode.AMOUNT_CURRENCY_MISSING,
                 message="field 4 present without field 49; showing minor units, exponent not assumed",
+                field_number=4,
+                byte_offset=None,  # interpretation layer: operates on already-decoded values, no raw position
             )],
         )
 
@@ -70,9 +72,11 @@ def format_amount(decoded_fields: dict[int, str], exponents: dict[str, int]) -> 
             exponent_used=None,
             assumed=True,
             diagnostics=[Diagnostic(
-                code="amount_currency_unknown",
+                code=DiagnosticCode.AMOUNT_CURRENCY_UNKNOWN,
                 message=f"field 49 currency code {currency_code!r} not in the exponent table; "
                         f"showing minor units, exponent not assumed",
+                field_number=4,
+                byte_offset=None,
             )],
         )
 

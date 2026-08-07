@@ -1,0 +1,22 @@
+# Field 3 (Processing Code) is three 2-digit sub-components: transaction
+# type, from-account type, to-account type. That's a different shape
+# than a normal single-code value_map, so it gets its own small table
+# here instead of trying to force it into FieldSpec.value_map. Public
+# ISO 8583 reference values, representative rather than exhaustive --
+# an unmapped sub-code is reported as unmapped, not an error.
+
+transaction_type:
+  "00": "Purchase / goods and services"
+  "01": "Cash advance / withdrawal"
+  "09": "Purchase with cashback"
+  "17": "Payment"
+  "20": "Refund / return"
+  "28": "Balance inquiry"
+  "30": "Account transfer"
+
+account_type:
+  "00": "Default / not specified"
+  "10": "Savings account"
+  "20": "Checking / current account"
+  "30": "Credit card / credit line"
+  "40": "Universal account"

@@ -22,13 +22,20 @@ byte length is still known, so the offset stays trustworthy) with the
 raw nibble kept in the message. The same problem in a length prefix
 is a stop: an unreadable prefix means the field's byte length is
 unknown, so nothing after it can be trusted either.
+
+Diagnostic byte_offset here is local: byte position within `hex_dump`
+(the caller's own input, starting right after the bitmap), already in
+true bytes since that's this module's native unit -- parser.py just
+adds the right base when assembling the final result, no /2 needed
+here (that conversion is for bitmap.py's hex-character-native offsets
+in binary mode, not this module's already-byte-native ones).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .diagnostics import Diagnostic
+from .diagnostics import Diagnostic, DiagnosticCode
 from .spec import BcdPad, DataType, FieldSpec, LengthType, MessageSpec
 
 
@@ -53,7 +60,9 @@ def _nibbles(hex_bytes: str) -> list[int]:
     return [int(c, 16) for c in hex_bytes]
 
 
-def _unpack_bcd(nibbles: list[int], digit_count: int, pad: BcdPad, field_number: int) -> tuple[str, list[Diagnostic]]:
+def _unpack_bcd(
+    nibbles: list[int], digit_count: int, pad: BcdPad, field_number: int, byte_offset: int,
+) -> tuple[str, list[Diagnostic]]:
     """nibbles may carry one extra pad nibble beyond digit_count, when digit_count is odd."""
     if digit_count % 2 == 1 and len(nibbles) > digit_count:
         digit_nibbles = nibbles[1:] if pad == BcdPad.LEADING else nibbles[:-1]
@@ -68,8 +77,10 @@ def _unpack_bcd(nibbles: list[int], digit_count: int, pad: BcdPad, field_number:
         else:
             chars.append(format(nib, "x"))
             diagnostics.append(Diagnostic(
-                code="field_invalid_bcd_nibble",
+                code=DiagnosticCode.FIELD_INVALID_BCD_NIBBLE,
                 message=f"field {field_number}: BCD nibble {nib:x} isn't a valid decimal digit (0-9)",
+                field_number=field_number,
+                byte_offset=byte_offset,
             ))
     return "".join(chars), diagnostics
 
@@ -88,14 +99,17 @@ def extract_fields_binary(hex_dump: str, present_fields: list[int], spec: Messag
         return hex_dump[start_byte * 2: (start_byte + nbytes) * 2]
 
     for field_number in present_fields:
+        field_start = pos
         field_spec = spec.fields.get(field_number)
         if field_spec is None:
             return ExtractResult(decoded, diagnostics, StopInfo(
                 stopped_at=f"field_{field_number}",
                 reason=Diagnostic(
-                    code="field_spec_missing",
+                    code=DiagnosticCode.FIELD_SPEC_MISSING,
                     message=f"field {field_number} has no spec entry, its length is unknown "
                             f"so parsing can't continue past it",
+                    field_number=field_number,
+                    byte_offset=field_start,
                 ),
             ))
 
@@ -108,13 +122,15 @@ def extract_fields_binary(hex_dump: str, present_fields: list[int], spec: Messag
                 return ExtractResult(decoded, diagnostics, StopInfo(
                     stopped_at=f"field_{field_number}",
                     reason=Diagnostic(
-                        code="field_length_prefix_truncated",
+                        code=DiagnosticCode.FIELD_LENGTH_PREFIX_TRUNCATED,
                         message=f"field {field_number}: message ends before its {prefix_digits}-digit "
                                 f"BCD length prefix ({prefix_bytes} byte(s))",
+                        field_number=field_number,
+                        byte_offset=field_start,
                     ),
                 ))
             prefix_str, prefix_diagnostics = _unpack_bcd(
-                _nibbles(hex_slice(pos, prefix_bytes)), prefix_digits, field_spec.bcd_pad, field_number,
+                _nibbles(hex_slice(pos, prefix_bytes)), prefix_digits, field_spec.bcd_pad, field_number, field_start,
             )
             if prefix_diagnostics:
                 # invalid BCD in a length prefix means the length itself can't be
@@ -122,9 +138,11 @@ def extract_fields_binary(hex_dump: str, present_fields: list[int], spec: Messag
                 return ExtractResult(decoded, diagnostics, StopInfo(
                     stopped_at=f"field_{field_number}",
                     reason=Diagnostic(
-                        code="field_length_prefix_invalid_bcd",
+                        code=DiagnosticCode.FIELD_LENGTH_PREFIX_INVALID_BCD,
                         message=f"field {field_number}: length prefix contains invalid BCD "
                                 f"({'; '.join(d.message for d in prefix_diagnostics)})",
+                        field_number=field_number,
+                        byte_offset=field_start,
                     ),
                 ))
             declared_length = int(prefix_str)
@@ -139,22 +157,27 @@ def extract_fields_binary(hex_dump: str, present_fields: list[int], spec: Messag
         take_bytes = min(value_bytes, available_bytes)
 
         if available_bytes < value_bytes:
-            code = ("field_variable_length_exceeds_remaining"
+            code = (DiagnosticCode.FIELD_VARIABLE_LENGTH_EXCEEDS_REMAINING
                     if field_spec.length_type == LengthType.VARIABLE
-                    else "field_fixed_length_exceeds_remaining")
+                    else DiagnosticCode.FIELD_FIXED_LENGTH_EXCEEDS_REMAINING)
             diagnostics.append(Diagnostic(
                 code=code,
                 message=f"field {field_number}: declared length needs {value_bytes} byte(s), "
                         f"only {available_bytes} remain in the message",
+                field_number=field_number,
+                byte_offset=field_start,
             ))
 
+        value_start = pos
         value_hex = hex_slice(pos, take_bytes)
         pos += take_bytes
 
         if field_spec.data_type == DataType.NUMERIC:
             nibbles = _nibbles(value_hex)
             expected_digits = declared_length if take_bytes == value_bytes else len(nibbles)
-            raw_value, bcd_diagnostics = _unpack_bcd(nibbles, expected_digits, field_spec.bcd_pad, field_number)
+            raw_value, bcd_diagnostics = _unpack_bcd(
+                nibbles, expected_digits, field_spec.bcd_pad, field_number, value_start,
+            )
             diagnostics.extend(bcd_diagnostics)
         elif field_spec.data_type == DataType.BINARY:
             raw_value = value_hex  # already the right representation: hex, 2 chars/byte
@@ -165,8 +188,10 @@ def extract_fields_binary(hex_dump: str, present_fields: list[int], spec: Messag
 
     if pos < total_bytes:
         diagnostics.append(Diagnostic(
-            code="trailing_bytes",
+            code=DiagnosticCode.TRAILING_BYTES,
             message=f"{total_bytes - pos} unconsumed byte(s) remain after the last declared field",
+            field_number=None,
+            byte_offset=pos,
         ))
 
     return ExtractResult(decoded, diagnostics, None)

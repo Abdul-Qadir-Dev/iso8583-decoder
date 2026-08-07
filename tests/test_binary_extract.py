@@ -48,6 +48,9 @@ def test_invalid_bcd_nibble_in_data_is_diagnostic_not_stop(spec):
     assert result.decoded_so_far[3] == "ab0000"  # invalid nibbles preserved as hex chars
     codes = [d.code for d in result.diagnostics]
     assert codes.count("field_invalid_bcd_nibble") == 2  # both 'a' and 'b' are invalid
+    for d in result.diagnostics:
+        assert d.field_number == 3
+        assert d.byte_offset == 0  # byte position where field 3's value begins
 
 
 def test_invalid_bcd_nibble_in_length_prefix_stops(spec):

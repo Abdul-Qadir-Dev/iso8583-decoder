@@ -14,13 +14,19 @@ rather than just wrong in one field:
 In those three cases parsing stops and the result is marked partial,
 carrying whatever was decoded up to that point plus the reason it
 stopped -- not a best-effort guess at what comes after.
+
+Diagnostic byte_offset here is local: character position within
+`remaining` (the caller's own input, starting at the primary bitmap),
+not an absolute position in the full raw message. parser.py adds the
+right base and, in binary mode, converts hex-dump characters to true
+bytes -- this module stays mode-agnostic and doesn't know which.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .diagnostics import Diagnostic
+from .diagnostics import Diagnostic, DiagnosticCode
 
 _HEX_DIGITS = set("0123456789abcdefABCDEF")
 
@@ -51,25 +57,35 @@ def _set_bit_positions(hex_str: str, base_field: int) -> list[int]:
     return positions
 
 
-def _flag_unknown_fields(fields: list[int], known_fields: set[int], diagnostics: list[Diagnostic]) -> None:
+def _local_offset_for_field(f: int, base_field: int, block_start: int) -> int:
+    """Which hex character (local to `remaining`) holds this field's bit."""
+    return block_start + (f - base_field) // 4
+
+
+def _flag_unknown_fields(
+    fields: list[int], known_fields: set[int], base_field: int, block_start: int, diagnostics: list[Diagnostic],
+) -> None:
     for f in fields:
         if f not in known_fields:
             diagnostics.append(Diagnostic(
-                code="bitmap_field_not_in_spec",
+                code=DiagnosticCode.BITMAP_FIELD_NOT_IN_SPEC,
                 message=f"bit set for field {f}, which is not defined in the loaded spec",
+                field_number=f,
+                byte_offset=_local_offset_for_field(f, base_field, block_start),
             ))
 
 
 def _stopped(
-    code: str,
+    code: DiagnosticCode,
     reason: str,
+    offset: int,
     diagnostics: list[Diagnostic],
     primary_hex: str,
     secondary_hex: str | None = None,
     present_fields: list[int] | None = None,
     consumed_chars: int = 0,
 ) -> BitmapResult:
-    diagnostics.append(Diagnostic(code=code, message=reason))
+    diagnostics.append(Diagnostic(code=code, message=reason, field_number=None, byte_offset=offset))
     return BitmapResult(
         present_fields=present_fields or [],
         primary_hex=primary_hex,
@@ -89,23 +105,23 @@ def parse_bitmap(remaining: str, known_fields: set[int]) -> BitmapResult:
 
     if len(remaining) < 16:
         return _stopped(
-            "bitmap_primary_too_short",
+            DiagnosticCode.BITMAP_PRIMARY_TOO_SHORT,
             "message is too short to contain a primary bitmap (need 16 hex characters)",
-            diagnostics, primary_hex=remaining,
+            0, diagnostics, primary_hex=remaining,
         )
 
     primary_hex = remaining[:16]
     if not _is_hex(primary_hex):
         return _stopped(
-            "bitmap_primary_non_hex",
+            DiagnosticCode.BITMAP_PRIMARY_NON_HEX,
             "primary bitmap contains non-hex characters, field offsets can't be trusted",
-            diagnostics, primary_hex=primary_hex,
+            0, diagnostics, primary_hex=primary_hex,
         )
 
     primary_bits = _set_bit_positions(primary_hex, base_field=1)
     secondary_indicated = 1 in primary_bits
     present_fields = [f for f in primary_bits if f != 1]
-    _flag_unknown_fields(present_fields, known_fields, diagnostics)
+    _flag_unknown_fields(present_fields, known_fields, base_field=1, block_start=0, diagnostics=diagnostics)
 
     if not secondary_indicated:
         return BitmapResult(
@@ -116,29 +132,31 @@ def parse_bitmap(remaining: str, known_fields: set[int]) -> BitmapResult:
     tail = remaining[16:32]
     if len(tail) < 16:
         return _stopped(
-            "bitmap_secondary_missing",
+            DiagnosticCode.BITMAP_SECONDARY_MISSING,
             "bit 1 indicated a secondary bitmap, but the message doesn't contain one; "
             "field offsets from here on can't be trusted",
-            diagnostics, primary_hex=primary_hex, present_fields=present_fields, consumed_chars=16,
+            16, diagnostics, primary_hex=primary_hex, present_fields=present_fields, consumed_chars=16,
         )
 
     if not _is_hex(tail):
         return _stopped(
-            "bitmap_secondary_non_hex",
+            DiagnosticCode.BITMAP_SECONDARY_NON_HEX,
             "secondary bitmap contains non-hex characters, field offsets can't be trusted",
-            diagnostics, primary_hex=primary_hex, secondary_hex=tail,
+            16, diagnostics, primary_hex=primary_hex, secondary_hex=tail,
             present_fields=present_fields, consumed_chars=16,
         )
 
     secondary_bits = _set_bit_positions(tail, base_field=65)
     if 65 in secondary_bits:
         diagnostics.append(Diagnostic(
-            code="bitmap_tertiary_bit_set",
+            code=DiagnosticCode.BITMAP_TERTIARY_BIT_SET,
             message="bit 65 set; would indicate a tertiary bitmap (fields 129-192), out of scope for this decoder",
+            field_number=65,
+            byte_offset=_local_offset_for_field(65, base_field=65, block_start=16),
         ))
         secondary_bits = [f for f in secondary_bits if f != 65]
 
-    _flag_unknown_fields(secondary_bits, known_fields, diagnostics)
+    _flag_unknown_fields(secondary_bits, known_fields, base_field=65, block_start=16, diagnostics=diagnostics)
     present_fields = present_fields + secondary_bits
 
     return BitmapResult(

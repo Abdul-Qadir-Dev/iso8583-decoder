@@ -35,6 +35,7 @@ class FormatHint(str, Enum):
     AMOUNT_MINOR_UNITS = "amount_minor_units"
     DATE_MMDD = "date_mmdd"
     TIME_HHMMSS = "time_hhmmss"
+    DATETIME_MMDDHHMMSS = "datetime_mmddhhmmss"
     EXPIRY_YYMM = "expiry_yymm"
 
 
