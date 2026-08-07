@@ -92,6 +92,17 @@ class DiagnosticCode(str, Enum):
     AMOUNT_CURRENCY_UNKNOWN = ("amount_currency_unknown", Severity.DIAGNOSTIC,
         "field 49's currency code isn't in the exponent table; the amount can't be formatted")
 
+    # -- unrecoverable at the very start: decode_message() raises rather than
+    # returning a DecodeResult here, since there's no MTI to build one around.
+    # The API layer catches these and reports them the same way as any other
+    # stop (200, partial=true, reason_code set) instead of letting a raised
+    # exception become an HTTP error -- a message that fails to decode is
+    # still a successful API call, no matter how early it fails.
+    MTI_FORMAT_INVALID = ("mti_format_invalid", Severity.STOP,
+        "the message isn't parseable at all: MTI must be exactly 4 numeric digits")
+    MTI_VERSION_UNSUPPORTED = ("mti_version_unsupported", Severity.STOP,
+        "the MTI's version digit doesn't have a mapped field spec")
+
     @classmethod
     def all(cls) -> list["DiagnosticCode"]:
         return list(cls)
