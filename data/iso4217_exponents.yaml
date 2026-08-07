@@ -1,0 +1,34 @@
+# ISO 4217 numeric currency code -> minor-unit exponent.
+#
+# Keys are quoted deliberately: unquoted leading-zero numbers ("036")
+# are ambiguous in YAML 1.1 (octal-like parsing), so every code is a
+# string here, matched against field 49's raw digit string as-is.
+#
+# Not exhaustive -- a representative set covering common majors and
+# every non-2-exponent currency likely to show up in test traffic.
+# An unlisted code isn't a bug: it hits the "unknown currency" path
+# in currency.py, which is the point of that path existing.
+
+# 2 decimal places (the common case)
+"840": 2   # USD
+"978": 2   # EUR
+"826": 2   # GBP
+"124": 2   # CAD
+"036": 2   # AUD
+"756": 2   # CHF
+"156": 2   # CNY
+"356": 2   # INR
+
+# 0 decimal places
+"392": 0   # JPY
+"410": 0   # KRW
+"704": 0   # VND
+"152": 0   # CLP
+"352": 0   # ISK
+
+# 3 decimal places
+"048": 3   # BHD
+"414": 3   # KWD
+"788": 3   # TND
+"400": 3   # JOD
+"512": 3   # OMR
