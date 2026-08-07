@@ -41,12 +41,15 @@ def test_complete_realistic_auth_request_decoded_field_by_field():
 
 def test_continue_anyway_diagnostics_then_a_stop_condition_in_one_message():
     # field 3: present but its value doesn't match numeric -- diagnostic, continues.
-    # field 60: bit set but not in the spec -- diagnostic at the bitmap stage,
-    #           then a stop once extraction actually reaches it.
+    # field 64: bit set but genuinely not in the spec -- diagnostic at the
+    #           bitmap stage, then a stop once extraction actually reaches it.
+    #           (Fields 48/55/60-63 no longer serve as "undefined field"
+    #           examples -- they're structurally decoded now, interpretation:
+    #           raw. See test_field_55_and_62_decode_fully_to_the_end below.)
     # field 70: legitimately defined and bit-set (in the secondary bitmap),
-    #           but never reached because the stop at field 60 halts
+    #           but never reached because the stop at field 64 halts
     #           extraction before getting there.
-    primary = bitmap_hex({1, 3, 32, 39, 60}, base_field=1)  # bit 1 -> secondary bitmap follows
+    primary = bitmap_hex({1, 3, 32, 39, 64}, base_field=1)  # bit 1 -> secondary bitmap follows
     secondary = bitmap_hex({70}, base_field=65)
     body = "ABCDEF" + "05" + "12345" + "00" + "TAIL-NEVER-READ"
     raw = "0100" + primary + secondary + body
@@ -54,15 +57,15 @@ def test_continue_anyway_diagnostics_then_a_stop_condition_in_one_message():
     result = decode_message(raw, encoding="ascii")
 
     assert result.partial is True
-    assert result.stopped_at == "field_60"
+    assert result.stopped_at == "field_64"
     assert result.reason.code == "field_spec_missing"
 
     codes = [d.code for d in result.diagnostics]
-    assert "bitmap_field_not_in_spec" in codes    # field 60's bit, flagged at the bitmap stage
+    assert "bitmap_field_not_in_spec" in codes    # field 64's bit, flagged at the bitmap stage
     assert "field_data_type_mismatch" in codes    # field 3's non-numeric value
 
     assert result.decoded_so_far == {3: "ABCDEF", 32: "12345", 39: "00"}
-    assert 60 not in result.decoded_so_far
+    assert 64 not in result.decoded_so_far
     assert 70 not in result.decoded_so_far  # never reached, extraction stopped first
 
 

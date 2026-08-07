@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import Diagnostic, DiagnosticCode
-from .spec import DataType, FieldSpec, LengthType, MessageSpec
+from .spec import DataType, FieldSpec, Interpretation, LengthType, MessageSpec
 
 _HEX_DIGITS = set("0123456789abcdefABCDEF")
 
@@ -140,6 +140,17 @@ def extract_fields(body: str, present_fields: list[int], spec: MessageSpec) -> E
                 code=DiagnosticCode.FIELD_DATA_TYPE_MISMATCH,
                 message=f"field {field_number}: value doesn't match its declared "
                         f"data_type ({field_spec.data_type.value})",
+                field_number=field_number,
+                byte_offset=field_start,
+            ))
+
+        if field_spec.interpretation == Interpretation.RAW:
+            byte_count = len(raw_value) // 2 if field_spec.data_type == DataType.BINARY else len(raw_value)
+            unit = "bytes" if field_spec.data_type == DataType.BINARY else "characters"
+            diagnostics.append(Diagnostic(
+                code=DiagnosticCode.FIELD_RAW_NOT_INTERPRETED,
+                message=f"field {field_number}: present, {byte_count} {unit}, "
+                        f"processor-specific content not interpreted by this decoder",
                 field_number=field_number,
                 byte_offset=field_start,
             ))

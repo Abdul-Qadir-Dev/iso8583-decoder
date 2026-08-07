@@ -84,3 +84,34 @@ def test_stop_preserves_fields_decoded_before_it(spec):
     assert result.decoded_so_far == {3: "000000"}
     assert result.stop.stopped_at == "field_999"
     assert result.stop.reason.byte_offset == 6  # right after field 3's 6 characters
+
+
+def test_interpretation_raw_field_decodes_and_raises_a_non_stop_diagnostic(spec):
+    # field 62: ans, LLLVAR, interpretation: raw
+    body = "010" + "PROC-DATA1"  # 3-digit length prefix + 10 chars
+    result = extract_fields(body, [62], spec)
+    assert result.stop is None
+    assert result.decoded_so_far == {62: "PROC-DATA1"}
+    diag = next(d for d in result.diagnostics if d.code == "field_raw_not_interpreted")
+    assert diag.field_number == 62
+    assert "10 characters" in diag.message
+    assert diag.severity.value == "diagnostic"  # not a stop
+
+
+def test_interpretation_raw_binary_field_reports_byte_count_not_char_count(spec):
+    # field 55: b, LLLVAR, interpretation: raw -- ASCII mode, hex text, 2 chars/byte
+    value = "0123456789abcdef"  # 16 hex chars = 8 bytes
+    body = "008" + value
+    result = extract_fields(body, [55], spec)
+    assert result.decoded_so_far == {55: value}
+    diag = next(d for d in result.diagnostics if d.code == "field_raw_not_interpreted")
+    assert "8 bytes" in diag.message
+
+
+def test_field_after_an_interpretation_raw_field_still_decodes_correctly(spec):
+    # proves the byte offset survived past a raw field, not just that the
+    # raw field itself decoded
+    body = "010" + "PROC-DATA1" + "301"  # field 62 (LLLVAR) then field 70 (fixed3)
+    result = extract_fields(body, [62, 70], spec)
+    assert result.stop is None
+    assert result.decoded_so_far == {62: "PROC-DATA1", 70: "301"}

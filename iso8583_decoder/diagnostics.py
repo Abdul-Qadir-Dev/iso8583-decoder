@@ -85,6 +85,10 @@ class DiagnosticCode(str, Enum):
         "a BCD nibble in a data field is above 9")
     TRAILING_BYTES = ("trailing_bytes", Severity.DIAGNOSTIC,
         "bytes/characters remain unconsumed after the last declared field")
+    FIELD_RAW_NOT_INTERPRETED = ("field_raw_not_interpreted", Severity.DIAGNOSTIC,
+        "field has interpretation=raw: structurally decoded correctly, its processor-specific "
+        "content is not interpreted by this decoder. Expected behavior, not an anomaly -- the "
+        "byte offset stayed trustworthy the whole way through")
 
     # -- interpretation layer (amount formatting; see explain.py) --
     AMOUNT_CURRENCY_MISSING = ("amount_currency_missing", Severity.DIAGNOSTIC,

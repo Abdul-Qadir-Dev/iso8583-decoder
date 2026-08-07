@@ -2,9 +2,11 @@
 # Not derived from any specific processor's internal implementation.
 #
 # Scoped to what's needed to decode authorization request/response,
-# reversal, and network management messages. Fields not listed here
-# (e.g. 48, 55, 60-63 private-use/EMV/TLV blocks) are intentionally
-# out of scope for v1 -- see README limitations.
+# reversal, and network management messages. Fields 48, 55, and 60-63
+# (private-use / EMV TLV) are structurally decoded (interpretation:
+# raw) since their length encoding is standard even though their
+# content is processor-specific -- see README limitations for what
+# "structurally decoded, not interpreted" means in practice.
 
 variant: "1987"
 name: "generic-1987"
@@ -149,6 +151,12 @@ fields:
     length_digits: 2
     sensitivity: masked
     mask_strategy: track_data
+  48:
+    name: "Additional Data - Private"
+    data_type: ans
+    length_type: variable
+    length_digits: 3
+    interpretation: raw
   49:
     name: "Currency Code, Transaction"
     data_type: n
@@ -166,6 +174,36 @@ fields:
     length_type: fixed
     length: 8
     sensitivity: redacted
+  55:
+    name: "ICC System-Related Data (EMV)"
+    data_type: b
+    length_type: variable
+    length_digits: 3
+    interpretation: raw
+  60:
+    name: "Reserved for Private Use"
+    data_type: ans
+    length_type: variable
+    length_digits: 3
+    interpretation: raw
+  61:
+    name: "Reserved for Private Use"
+    data_type: ans
+    length_type: variable
+    length_digits: 3
+    interpretation: raw
+  62:
+    name: "Reserved for Private Use"
+    data_type: ans
+    length_type: variable
+    length_digits: 3
+    interpretation: raw
+  63:
+    name: "Reserved for Private Use"
+    data_type: ans
+    length_type: variable
+    length_digits: 3
+    interpretation: raw
   70:
     name: "Network Management Information Code"
     data_type: n

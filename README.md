@@ -109,11 +109,18 @@ for the interactive API docs.
 
 ## Current limitations
 
-- Fields 48, 55, and 60-63 (private-use data and EMV TLV) aren't in the
-  loaded spec. If a message sets one of those bitmap bits, decoding flags a
-  `bitmap_field_not_in_spec` diagnostic and, if extraction reaches that
-  field, **stops there** -- these fields aren't shown as an uninterpreted
-  raw dump, decoding of the rest of the message halts.
+- Fields 48, 55, and 60-63 (private-use data and EMV TLV) are in the loaded
+  spec with their standard length encoding (LLLVAR), so they're structurally
+  decoded like any other field -- the byte offset stays trustworthy and
+  decoding continues through them. Their *content* is processor-specific
+  and is never interpreted: each one raises a `field_raw_not_interpreted`
+  diagnostic (informational, not a stop, not a warning -- present and
+  consumed correctly is the normal case here) and `explain_fields()`
+  reports a byte/character count rather than attempting to explain the
+  content.
+- A field with no spec entry at all is different: `field_spec_missing` is
+  still a stop, because there's no way to know its length. Unknown length
+  stops decoding; unknown meaning doesn't.
 - The tertiary bitmap (bit 65 in the secondary bitmap) is recognized and
   flagged (`bitmap_tertiary_bit_set`) but never parsed -- fields 129-192 are
   out of scope.

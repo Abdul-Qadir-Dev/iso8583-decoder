@@ -66,6 +66,32 @@ def test_secondary_bitmap_sample_decodes_exact_values():
     }
 
 
+def test_field_55_and_62_decode_fully_to_the_end_with_field_70_correct():
+    """The specific proof requested for the fields-48/55/60-63 fix: a message
+    carrying field 55 (EMV/ICC, interpretation: raw, binary) and field 62
+    (private-use, interpretation: raw, ans) decodes all the way to field 70
+    -- which comes after both -- with field 70's value exactly correct. That
+    field 70 decodes at all, let alone correctly, is what proves the byte
+    offset survived reading two raw-interpretation fields rather than being
+    lost. Before this fix, this exact message stopped at field 55 with
+    field_spec_missing."""
+    result = decode_message(get_sample("emv_and_private_use_data_0100").raw, encoding="ascii")
+
+    assert result.partial is False
+    assert result.decoded_so_far == {
+        3: "000000",
+        11: "000123",
+        55: "0123456789abcdef",
+        62: "PROC-DATA1",
+        70: "301",
+    }
+
+    codes = [d.code for d in result.diagnostics]
+    assert codes.count("field_raw_not_interpreted") == 2
+    for d in result.diagnostics:
+        assert d.severity.value == "diagnostic"  # informational, not a stop, not an error
+
+
 def test_malformed_invalid_bcd_data_field_exact_value_and_count():
     # restored: the old bespoke test asserted decoded_so_far[3] == "ab0000" and
     # codes.count("field_invalid_bcd_nibble") == 2 by calling extract_fields_binary

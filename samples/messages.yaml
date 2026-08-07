@@ -89,6 +89,22 @@
     partial: false
     diagnostic_codes: []
 
+- id: emv_and_private_use_data_0100
+  description: >
+    Authorization request carrying field 55 (EMV/ICC data) and field 62
+    (private-use), both interpretation: raw -- structurally decoded since
+    their length encoding is standard, but their processor-specific
+    content is never interpreted. Field 70 comes after both and decodes
+    correctly, proving the byte offset survived through both raw fields
+    rather than being lost. This is the case that used to stop decoding
+    entirely before fields 48/55/60-63 were added to the spec.
+  transaction_type: "0100 authorization request"
+  encoding: ascii
+  raw: '0100a02000000000020404000000000000000000000001230080123456789abcdef010PROC-DATA1301'
+  expected:
+    partial: false
+    diagnostic_codes: ["field_raw_not_interpreted"]
+
 - id: malformed_invalid_bcd_data_field
   description: >
     Binary-mode message where field 3's BCD-packed data contains two

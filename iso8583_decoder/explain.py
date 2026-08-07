@@ -28,7 +28,7 @@ import yaml
 
 from .currency import format_amount, load_currency_exponents
 from .diagnostics import Diagnostic
-from .spec import FieldSpec, FormatHint, MessageSpec
+from .spec import DataType, FieldSpec, FormatHint, Interpretation, MessageSpec
 
 _PROCESSING_CODE_PATH = Path(__file__).resolve().parent.parent / "spec" / "processing_code_meanings.yaml"
 _processing_code_meanings = yaml.safe_load(_PROCESSING_CODE_PATH.read_text(encoding="utf-8"))
@@ -83,6 +83,9 @@ def _explain_one(
     if field_spec is None:
         return None, []
 
+    if field_spec.interpretation == Interpretation.RAW:
+        return _explain_raw(raw, field_spec), []
+
     if field_number == 3:
         return _explain_processing_code(raw), []
 
@@ -99,6 +102,17 @@ def _explain_one(
         return field_spec.value_map.get(raw, f"unmapped code: {raw!r}"), []
 
     return None, []
+
+
+def _explain_raw(raw: str, field_spec: FieldSpec) -> str:
+    """A length/hex dump note, not a content explanation -- interpretation=raw
+    fields are structurally decoded correctly but their processor-specific
+    content is deliberately never interpreted. Saying so explicitly is the
+    point: a silent None here would be indistinguishable from "nothing to
+    interpret" on an ordinary identifier field like a terminal ID."""
+    if field_spec.data_type == DataType.BINARY:
+        return f"{len(raw) // 2} bytes of processor-specific data (hex), not interpreted by this decoder"
+    return f"{len(raw)} characters of processor-specific data, not interpreted by this decoder"
 
 
 def _explain_processing_code(raw: str) -> str:

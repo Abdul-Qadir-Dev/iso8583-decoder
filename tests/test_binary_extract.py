@@ -86,3 +86,23 @@ def test_field_not_in_spec_stops(spec):
     assert result.stop is not None
     assert result.stop.reason.code == "field_spec_missing"
     assert result.decoded_so_far == {}
+
+
+def test_interpretation_raw_field_decodes_and_raises_a_non_stop_diagnostic(spec):
+    # field 62: ans, LLLVAR -- prefix "010" is odd-digit BCD (needs a pad nibble),
+    # value stays plain ASCII bytes even in binary mode since it's an ans field
+    body = pack_bcd("010") + ascii_hex("PROC-DATA1")
+    result = extract_fields_binary(body, [62], spec)
+    assert result.stop is None
+    assert result.decoded_so_far == {62: "PROC-DATA1"}
+    diag = next(d for d in result.diagnostics if d.code == "field_raw_not_interpreted")
+    assert diag.field_number == 62
+    assert "10 bytes" in diag.message
+    assert diag.severity.value == "diagnostic"
+
+
+def test_field_after_an_interpretation_raw_field_still_decodes_correctly(spec):
+    body = pack_bcd("010") + ascii_hex("PROC-DATA1") + pack_bcd("301")  # field 62 then field 70
+    result = extract_fields_binary(body, [62, 70], spec)
+    assert result.stop is None
+    assert result.decoded_so_far == {62: "PROC-DATA1", 70: "301"}

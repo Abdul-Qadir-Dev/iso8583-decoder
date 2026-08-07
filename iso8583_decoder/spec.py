@@ -58,6 +58,24 @@ class MaskStrategy(str, Enum):
     TRACK_DATA = "track_data"   # a PAN is embedded inside track-format data
 
 
+class Interpretation(str, Enum):
+    """Whether a field's content is meant to be explained at all.
+
+    NONE (default): normal -- explain.py may produce plain-language text
+    from format_hint/value_map, or nothing if neither applies.
+    RAW: the field is structurally decoded like any other (its length is
+    known, so the byte offset stays trustworthy) but its *contents* are
+    processor-specific and never interpreted -- private-use fields and
+    EMV TLV blobs, not fields we simply haven't gotten around to yet.
+    That distinction is why this exists separately from just leaving
+    format_hint/value_map empty: it's an explicit statement that no
+    interpretation is coming, not silence.
+    """
+
+    NONE = "none"
+    RAW = "raw"
+
+
 class BcdPad(str, Enum):
     """Which end carries the filler nibble when a BCD-packed digit count is odd.
 
@@ -96,6 +114,15 @@ class FieldSpec(BaseModel):
     bcd_pad: BcdPad = BcdPad.LEADING
     sensitivity: Sensitivity = Sensitivity.NONE
     mask_strategy: MaskStrategy = MaskStrategy.NONE
+    interpretation: Interpretation = Interpretation.NONE
+
+    @model_validator(mode="after")
+    def check_interpretation_raw_has_nothing_to_interpret(self):
+        if self.interpretation == Interpretation.RAW and (self.value_map or self.format_hint != FormatHint.NONE):
+            raise ValueError(
+                f"field {self.number}: interpretation=raw can't also declare a value_map or format_hint"
+            )
+        return self
 
     @model_validator(mode="after")
     def check_sensitivity_consistency(self):

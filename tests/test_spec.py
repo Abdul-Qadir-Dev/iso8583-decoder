@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from iso8583_decoder.spec import DataType, FieldSpec, LengthType, load_spec
+from iso8583_decoder.spec import DataType, FieldSpec, Interpretation, LengthType, load_spec
 from tests.conftest import SPEC_PATH
 
 
@@ -75,4 +75,38 @@ def test_spec_key_must_match_field_number():
             variant="1987",
             name="bad",
             fields={3: FieldSpec(number=4, name="mismatched", data_type="n", length_type="fixed", length=12)},
+        )
+
+
+def test_field_55_is_binary_raw_interpretation():
+    spec = load_spec(SPEC_PATH)
+    field_55 = spec.fields[55]
+    assert field_55.data_type == DataType.BINARY
+    assert field_55.length_type.value == "variable"
+    assert field_55.length_digits == 3
+    assert field_55.interpretation == Interpretation.RAW
+
+
+def test_fields_48_and_60_to_63_are_ans_raw_interpretation():
+    spec = load_spec(SPEC_PATH)
+    for number in (48, 60, 61, 62, 63):
+        field_spec = spec.fields[number]
+        assert field_spec.data_type == DataType.ALPHANUMERIC_SPECIAL, number
+        assert field_spec.length_digits == 3, number
+        assert field_spec.interpretation == Interpretation.RAW, number
+
+
+def test_interpretation_raw_cannot_also_declare_a_value_map():
+    with pytest.raises(ValidationError):
+        FieldSpec(
+            number=48, name="bad", data_type="ans", length_type="variable", length_digits=3,
+            interpretation=Interpretation.RAW, value_map={"00": "nope"},
+        )
+
+
+def test_interpretation_raw_cannot_also_declare_a_format_hint():
+    with pytest.raises(ValidationError):
+        FieldSpec(
+            number=48, name="bad", data_type="ans", length_type="variable", length_digits=3,
+            interpretation=Interpretation.RAW, format_hint="date_mmdd",
         )

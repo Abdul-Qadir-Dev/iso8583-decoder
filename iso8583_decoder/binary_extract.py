@@ -36,7 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import Diagnostic, DiagnosticCode
-from .spec import BcdPad, DataType, LengthType, MessageSpec
+from .spec import BcdPad, DataType, Interpretation, LengthType, MessageSpec
 
 
 @dataclass
@@ -185,6 +185,16 @@ def extract_fields_binary(hex_dump: str, present_fields: list[int], spec: Messag
             raw_value = _hex_to_ascii(value_hex)
 
         decoded[field_number] = raw_value
+
+        if field_spec.interpretation == Interpretation.RAW:
+            byte_count = take_bytes  # already true bytes in binary mode, no /2 needed
+            diagnostics.append(Diagnostic(
+                code=DiagnosticCode.FIELD_RAW_NOT_INTERPRETED,
+                message=f"field {field_number}: present, {byte_count} bytes, "
+                        f"processor-specific content not interpreted by this decoder",
+                field_number=field_number,
+                byte_offset=field_start,
+            ))
 
     if pos < total_bytes:
         diagnostics.append(Diagnostic(

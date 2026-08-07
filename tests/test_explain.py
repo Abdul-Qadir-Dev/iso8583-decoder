@@ -123,3 +123,21 @@ def test_unknown_field_number_not_in_spec_does_not_crash():
     explained = explain_fields({999: "whatever"}, spec1987())
     assert explained.fields[999].interpreted is None
     assert explained.fields[999].raw == "whatever"
+
+
+def test_interpretation_raw_field_gets_an_explicit_not_interpreted_note():
+    # distinct from interpreted=None: this is an explicit statement that no
+    # interpretation is coming, not silence indistinguishable from "nothing
+    # to interpret" on an ordinary identifier field
+    explained = explain_fields({62: "PROC-DATA1"}, spec1987())
+    interpreted = explained.fields[62].interpreted
+    assert interpreted is not None
+    assert "not interpreted by this decoder" in interpreted
+    assert "10 characters" in interpreted
+
+
+def test_interpretation_raw_binary_field_reports_byte_count():
+    explained = explain_fields({55: "0123456789abcdef"}, spec1987())  # 16 hex chars = 8 bytes
+    interpreted = explained.fields[55].interpreted
+    assert "8 bytes" in interpreted
+    assert "not interpreted by this decoder" in interpreted
