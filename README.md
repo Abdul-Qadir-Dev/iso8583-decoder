@@ -135,27 +135,28 @@ for the interactive API docs.
 
 ## Deploy
 
-`Dockerfile` and `render.yaml` are set up for [Render](https://render.com):
-a free web-service tier, Docker-native, deploys straight from a connected
-GitHub repo, and (last checked) doesn't require a card on file for the free
-tier -- a reasonable fit for a small stateless demo API like this one.
+Deployed on [Vercel](https://vercel.com)'s Hobby tier: serverless, native
+FastAPI support (Vercel looks for a `FastAPI` instance named `app` at a
+supported entrypoint), free, deploys straight from a connected GitHub repo.
+`pyproject.toml`'s `[tool.vercel]` entrypoint points at the existing
+`iso8583_decoder/api.py` app directly rather than adding a duplicate
+entrypoint file. The `Dockerfile` stays in the repo for local use and
+self-hosting -- it isn't used by the Vercel deployment, which builds
+straight from `requirements.txt`.
 
 Steps to run yourself (account creation isn't something this tool does on
 your behalf):
 
 1. Push this repo to GitHub, if it isn't already.
-2. Create a free account at [render.com](https://render.com).
-3. **New +** -> **Web Service** -> connect this GitHub repo.
-4. Render should detect `render.yaml` automatically (Blueprint). If not, set
-   the environment to **Docker** manually and leave build/start commands
-   blank -- the `Dockerfile` handles both.
+2. Create a free account at [vercel.com](https://vercel.com).
+3. **Add New** -> **Project** -> import this GitHub repo.
+4. Vercel should detect it as a Python/FastAPI project automatically from
+   `requirements.txt` and `pyproject.toml`. Leave build/output settings on
+   their defaults.
 5. Deploy, and wait for the build to finish.
-6. Visit `https://<your-service>.onrender.com/health` and confirm it returns
-   `{"status": "ok"}`.
+6. Visit `https://<your-project>.vercel.app/health` and confirm it returns
+   `{"status": "ok"}`, then check `/` to confirm the UI loads too.
 7. Paste that URL into the "Live demo" line near the top of this README.
-
-The free tier sleeps after a period of inactivity; the first request after
-that can take a few seconds while it wakes up.
 
 ## Provenance
 

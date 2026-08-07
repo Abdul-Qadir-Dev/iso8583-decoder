@@ -39,9 +39,9 @@ def test_index_page_contains_no_pan_shaped_digit_runs_at_all():
     hardcode sample data at all, since samples are loaded from GET /samples
     at runtime -- so no 12-19 digit run should appear in the source file,
     not even one matching a standard test PAN."""
-    from iso8583_decoder.api import INDEX_HTML_PATH
+    from iso8583_decoder.api import WEB_DIR
 
-    source = INDEX_HTML_PATH.read_text(encoding="utf-8")
+    source = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     candidates = re.findall(r"\b\d{12,19}\b", source)
     assert candidates == [], f"page source hardcodes PAN-shaped digit runs: {candidates}"
 
@@ -49,9 +49,9 @@ def test_index_page_contains_no_pan_shaped_digit_runs_at_all():
 def test_index_page_does_not_hardcode_any_sample_message_content():
     """Every sample's raw message must come from the API, not be embedded
     directly in the static HTML."""
-    from iso8583_decoder.api import INDEX_HTML_PATH
+    from iso8583_decoder.api import WEB_DIR
 
-    source = INDEX_HTML_PATH.read_text(encoding="utf-8")
+    source = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     for sample in load_samples():
         assert sample.raw not in source, f"{sample.id}'s raw message is hardcoded in the page"
 

@@ -1,2 +1,9 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.vercel]
+# The app lives at iso8583_decoder/api.py, not one of Vercel's auto-detected
+# entrypoint filenames (app.py/index.py/server.py/main.py/wsgi.py/asgi.py),
+# so this points Vercel at the existing FastAPI instance directly instead of
+# adding a duplicate entrypoint file.
+entrypoint = "iso8583_decoder.api:app"

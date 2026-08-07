@@ -40,7 +40,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .diagnostics import Diagnostic, DiagnosticCode
 from .explain import explain_fields
@@ -70,7 +71,7 @@ from .schemas import (
 
 MAX_BODY_BYTES = 64 * 1024
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-INDEX_HTML_PATH = Path(__file__).resolve().parent.parent / "web" / "index.html"
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 logger = logging.getLogger("iso8583_decoder.api")
 
@@ -247,9 +248,13 @@ def create_app() -> FastAPI:
     def health_endpoint() -> HealthResponse:
         return HealthResponse()
 
-    @app.get("/", include_in_schema=False)
-    def index_page() -> FileResponse:
-        return FileResponse(INDEX_HTML_PATH, media_type="text/html")
+    # Vercel's documented pattern for serving a FastAPI app's static assets:
+    # app.mount(...) with StaticFiles gets promoted to the CDN at build time
+    # there, and works identically under local uvicorn -- same ASGI-level
+    # StaticFiles either way, nothing uvicorn-specific about it. html=True
+    # serves web/index.html for "/". Mounted last so it only ever handles
+    # paths none of the explicit routes above already claimed.
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
     return app
 
