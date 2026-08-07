@@ -1,78 +1,162 @@
 # ISO 8583 Message Decoder
 
-Work in progress. Full overview, architecture, and setup sections land once the
-parser and API exist; this file starts here because a couple of design
-decisions are worth writing down as they're made, not reconstructed later.
+Decodes ISO 8583 payment messages (ASCII and binary/BCD) into readable fields
+with plain-language explanations and troubleshooting diagnostics. Built for
+payments support and fintech engineering work: authorization, financial,
+reversal, and network-management message traffic.
+
+[![Tests](https://github.com/Abdul-Qadir-Dev/iso8583-decoder/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdul-Qadir-Dev/iso8583-decoder/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**Live demo:** _not deployed yet -- see [Deploy](#deploy) below_
+<!-- TODO: replace the line above with the deployed URL once it exists -->
+
+![Decoded ISO 8583 message with a diagnostic visible in the UI](docs/screenshot.png)
+
+## Architecture
+
+Decoding is a fixed pipeline, not one function, and each stage is a separate
+module with one job:
+
+```
+raw message
+    |
+    v
+mti.py        -- structural MTI decode (version/class/function/origin from
+    |             digit position). Also picks which field spec to load.
+    v
+bitmap.py     -- primary/secondary bitmap -> list of present field numbers.
+    |             Identical code path for ASCII and binary mode.
+    v
+extract.py /  -- reads each present field's raw value per its spec entry.
+binary_extract.py   ASCII mode reads characters; binary mode BCD-unpacks.
+    |
+    v
+parser.py     -- wires the three stages together into one DecodeResult,
+                  collecting Diagnostics from all of them.
+```
+
+Two more layers sit on top of a `DecodeResult`, both optional and neither one
+touches the parse itself:
+
+- **render.py** -- turns a decoded value into safe displayed text (masking,
+  redaction). The only place that happens.
+- **explain.py** -- turns a decoded value into a plain-language string
+  (response code meanings, formatted amounts, formatted dates). Lazy, called
+  only when asked for.
+
+`api.py` (FastAPI) and `web/index.html` (the UI) are thin callers on top of
+all of this -- they compose `parser` + `render` + `explain`, they don't
+reimplement any of it.
+
+**The spec/YAML boundary:** nothing about a specific field layout, value
+meaning, or exchange rate table is a Python literal. `spec/*.yaml` defines
+per-processor field layouts (currently one: `1987_generic.yaml` -- a
+different processor's layout is a new YAML file, not new code).
+`spec/mti_meanings.yaml` and `spec/processing_code_meanings.yaml` hold
+ISO-8583-standard-level value maps. `data/iso4217_exponents.yaml` holds the
+currency exponent table. `samples/messages.yaml` holds the sample library.
+`iso8583_decoder/spec.py`'s Pydantic models are what load and validate all
+of it.
 
 ## Design decisions
 
-### Sensitive data handling
+**Encoding is explicit, never sniffed.** `decode_message()` and `POST
+/decode` both require an `encoding` argument with no default. An ISO 8583
+message doesn't self-identify whether it's ASCII or binary/BCD, so guessing
+from content would produce a plausible-looking wrong decode instead of an
+obvious failure -- exactly the class of bug this tool exists to catch, not
+create.
 
-Card numbers and PIN blocks pass through this tool because troubleshooting
-ISO 8583 traffic means looking at real messages. That doesn't mean the tool
-should display them.
+**Two failure mechanisms, kept separate.** A `Diagnostic` means something is
+wrong but the byte offset is still known, so decoding continues. A partial
+result means the offset became untrustworthy, so extraction stopped, with
+`stopped_at` and `reason` recorded. Both can appear in the same result -- a
+message can accumulate several diagnostics and then hit a stop. Conflating
+the two would either hide a real anomaly behind an apparently-complete
+decode, or throw away everything already read past the first problem.
 
-- **Masked** (PAN, and PANs embedded in track 1/2 data): shown as first 6 +
-  last 4, the middle replaced with `*`. Enough to confirm you're looking at
-  the right card without exposing the full number.
-- **Redacted** (PIN block, security-related control information): never
-  shown. Not "shown if you ask nicely" -- there is no troubleshooting reason
-  to render a PIN block, so it isn't an option. Output is just
-  `[redacted, N bytes]`.
-- **Reveal** is an explicit opt-in flag, off by default. `POST /decode`
-  threads it through as a request field (`reveal: bool = false`), not a
-  config setting someone can forget is on.
+**Sensitivity is spec data; masking is a render-layer concern.** Which
+fields are sensitive, and how, is declared per field in the YAML spec
+(`sensitivity`, `mask_strategy`), not hardcoded by field number in code.
+Masking itself happens only at the render layer -- the parser always carries
+the true value -- so the decoded-field table, the diagnostics panel, and
+error messages all inherit the same rule instead of each having to remember
+to apply it. Reveal is explicit opt-in, off by default, threaded through as
+a request parameter rather than a setting someone can forget is on.
 
-Masking dispatches on a declared strategy in the spec, not on field number:
-a processor whose PAN sits in a different field marks it in YAML, without
-touching renderer code.
+## Setup
 
-This lives at the render layer, not the parser. The parser always carries
-the true decoded value; masking is applied only at the point a value becomes
-displayed text. That's deliberate: it means the same masking rule covers the
-decoded-field table, the diagnostics panel, and error messages, instead of
-being something each output path has to remember to apply on its own. The
-usual way these tools leak data isn't the happy path, it's an exception
-message that interpolates the raw value it was complaining about.
+Requires Python 3.11.
 
-Masking also fails closed. Track 1/2 data only gets partially masked (PAN
-hidden, rest of the track shown) when the format is recognized; anything
-that doesn't match a known track layout gets masked in full rather than
-risk exposing a PAN in a shape the code didn't anticipate.
+```bash
+git clone https://github.com/Abdul-Qadir-Dev/iso8583-decoder.git
+cd iso8583-decoder
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+pytest -q
+```
 
-Which fields are masked or redacted, and which masking strategy applies, is
-data in the spec file (`sensitivity` and `mask_strategy` per field) rather
-than a field-number check inside the renderer.
+Run the API and UI locally:
 
-### API security posture
+```bash
+uvicorn iso8583_decoder.api:app --reload
+```
 
-`iso8583_decoder/api.py` has no authentication layer. That's a deliberate
-scope decision, not an oversight: this is a local/internal troubleshooting
-tool, and bolting on an auth scheme just to satisfy a checklist would be
-security theater without a real deployment story behind it. **Do not expose
-this API on a public or shared network as-is.** If it's ever deployed
-somewhere reachable by anyone other than its operator, it needs a real auth
-layer first.
+Then open `http://localhost:8000` for the UI, or `http://localhost:8000/docs`
+for the interactive API docs.
 
-What the API does enforce:
+## Current limitations
 
-- The raw message body is never logged, echoed, or persisted anywhere.
-  Request logs carry only endpoint, encoding, byte length, and diagnostic
-  codes -- never message content or decoded field values.
-- Unhandled exceptions return a fixed, generic `{"detail": "internal server
-  error"}` body and log only the exception's type name, never `str(exc)` or
-  a traceback, since an internal exception message could in principle embed
-  a raw field value.
-- Request bodies over 64 KB are rejected with 413 before any handler runs.
-- Decoded fields are masked/redacted by default in every response
-  (`reveal: bool = false`), same rule as the render layer above.
+- Fields 48, 55, and 60-63 (private-use data and EMV TLV) aren't in the
+  loaded spec. If a message sets one of those bitmap bits, decoding flags a
+  `bitmap_field_not_in_spec` diagnostic and, if extraction reaches that
+  field, **stops there** -- these fields aren't shown as an uninterpreted
+  raw dump, decoding of the rest of the message halts.
+- The tertiary bitmap (bit 65 in the secondary bitmap) is recognized and
+  flagged (`bitmap_tertiary_bit_set`) but never parsed -- fields 129-192 are
+  out of scope.
+- Only the 1987 generic field spec ships. The MTI version digit is decoded
+  structurally for 1993/1998/private-use too, but there's no field spec
+  mapped to them yet, so a message using one raises `UnsupportedVersionError`
+  (surfaced as a normal `200` with `reason_code: mti_version_unsupported`
+  through the API, not an HTTP error).
+- The API has no authentication and isn't intended for production or public
+  exposure as-is -- see `iso8583_decoder/api.py` and the Deploy section
+  below.
 
-A message that fails to decode -- a stop, a diagnostic, a partial result --
-is still a successful API call and returns `200` with the result in the
-body. 4xx is reserved for a malformed *request* (missing `encoding`, an
-invalid encoding value, an oversized body); 5xx is reserved for actual
-server bugs. Even the two cases where `decode_message()` can't produce a
-result at all (an MTI too broken to read, or an MTI version with no mapped
-spec) come back as `200` with `partial: true` and a `reason_code`, not an
-HTTP error -- the JSON request was well-formed even though the ISO 8583
-message inside it wasn't, and that's what decides the status code.
+## Deploy
+
+`Dockerfile` and `render.yaml` are set up for [Render](https://render.com):
+a free web-service tier, Docker-native, deploys straight from a connected
+GitHub repo, and (last checked) doesn't require a card on file for the free
+tier -- a reasonable fit for a small stateless demo API like this one.
+
+Steps to run yourself (account creation isn't something this tool does on
+your behalf):
+
+1. Push this repo to GitHub, if it isn't already.
+2. Create a free account at [render.com](https://render.com).
+3. **New +** -> **Web Service** -> connect this GitHub repo.
+4. Render should detect `render.yaml` automatically (Blueprint). If not, set
+   the environment to **Docker** manually and leave build/start commands
+   blank -- the `Dockerfile` handles both.
+5. Deploy, and wait for the build to finish.
+6. Visit `https://<your-service>.onrender.com/health` and confirm it returns
+   `{"status": "ok"}`.
+7. Paste that URL into the "Live demo" line near the top of this README.
+
+The free tier sleeps after a period of inactivity; the first request after
+that can take a few seconds while it wakes up.
+
+## Provenance
+
+Built from the public ISO 8583 specification, not derived from any
+employer's internal implementation. Sample messages use standard,
+publicly-documented test PANs (`4111111111111111`, `5555555555554444`), not
+real card or merchant data.
+
+## License
+
+[MIT](LICENSE).

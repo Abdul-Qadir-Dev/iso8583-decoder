@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: iso8583-decoder
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
