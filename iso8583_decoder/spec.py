@@ -38,6 +38,25 @@ class FormatHint(str, Enum):
     EXPIRY_YYMM = "expiry_yymm"
 
 
+class Sensitivity(str, Enum):
+    NONE = "none"
+    MASKED = "masked"       # partially shown by default, full value behind reveal
+    REDACTED = "redacted"   # never shown, not even behind reveal
+
+
+class MaskStrategy(str, Enum):
+    """How to mask a value, when sensitivity == masked. Meaningless otherwise.
+
+    Kept as spec data rather than a field-number check in the renderer,
+    so which fields get which masking behavior stays fully swappable
+    per processor, same as everything else in the spec file.
+    """
+
+    NONE = "none"
+    DIRECT = "direct"           # the raw value is itself the sensitive data (PAN)
+    TRACK_DATA = "track_data"   # a PAN is embedded inside track-format data
+
+
 class FieldSpec(BaseModel):
     """One data element's definition.
 
@@ -59,6 +78,16 @@ class FieldSpec(BaseModel):
     length_digits: Optional[int] = None     # set when length_type == variable
     format_hint: FormatHint = FormatHint.NONE
     value_map: dict[str, str] = Field(default_factory=dict)
+    sensitivity: Sensitivity = Sensitivity.NONE
+    mask_strategy: MaskStrategy = MaskStrategy.NONE
+
+    @model_validator(mode="after")
+    def check_sensitivity_consistency(self):
+        if self.sensitivity == Sensitivity.MASKED and self.mask_strategy == MaskStrategy.NONE:
+            raise ValueError(f"field {self.number}: sensitivity=masked needs a mask_strategy")
+        if self.sensitivity != Sensitivity.MASKED and self.mask_strategy != MaskStrategy.NONE:
+            raise ValueError(f"field {self.number}: mask_strategy only applies when sensitivity=masked")
+        return self
 
     @model_validator(mode="after")
     def check_length_fields(self):

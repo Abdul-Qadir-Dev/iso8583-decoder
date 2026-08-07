@@ -1,11 +1,8 @@
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
 
 from iso8583_decoder.spec import DataType, FieldSpec, LengthType, load_spec
-
-SPEC_PATH = Path(__file__).resolve().parent.parent / "spec" / "1987_generic.yaml"
+from tests.conftest import SPEC_PATH
 
 
 def test_loads_generic_1987_spec():

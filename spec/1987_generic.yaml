@@ -15,6 +15,8 @@ fields:
     data_type: n
     length_type: variable
     length_digits: 2
+    sensitivity: masked
+    mask_strategy: direct
   3:
     name: "Processing Code"
     data_type: n
@@ -74,6 +76,8 @@ fields:
     data_type: z
     length_type: variable
     length_digits: 2
+    sensitivity: masked
+    mask_strategy: track_data
   37:
     name: "Retrieval Reference Number"
     data_type: an
@@ -122,6 +126,13 @@ fields:
     data_type: ans
     length_type: fixed
     length: 15
+  45:
+    name: "Track 1 Data"
+    data_type: ans
+    length_type: variable
+    length_digits: 2
+    sensitivity: masked
+    mask_strategy: track_data
   49:
     name: "Currency Code, Transaction"
     data_type: n
@@ -132,6 +143,13 @@ fields:
     data_type: b
     length_type: fixed
     length: 8
+    sensitivity: redacted
+  53:
+    name: "Security-Related Control Information"
+    data_type: b
+    length_type: fixed
+    length: 8
+    sensitivity: redacted
   70:
     name: "Network Management Information Code"
     data_type: n
