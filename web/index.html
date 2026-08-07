@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISO 8583 Message Decoder</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --stop: #f85149;
+    --stop-bg: #3d1418;
+    --diag: #d29922;
+    --diag-bg: #3a2e0e;
+    --mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 24px;
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+  h1 { font-size: 1.2rem; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin: 0 0 24px; }
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 0 0 20px;
+  }
+  legend { padding: 0 6px; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    padding: 10px;
+    resize: vertical;
+  }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-top: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 0.78rem; color: var(--muted); }
+  select, button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  .radio-group { display: flex; gap: 14px; align-items: center; }
+  .radio-group label { display: flex; align-items: center; gap: 5px; font-size: 0.85rem; }
+  #decode-btn {
+    background: var(--accent);
+    color: #04101f;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 9px 18px;
+  }
+  #decode-btn:hover { opacity: 0.9; }
+  .reveal-line { font-size: 0.75rem; color: var(--muted); max-width: 320px; }
+  #encoding-error, #form-error {
+    color: var(--stop);
+    font-size: 0.8rem;
+    display: none;
+  }
+  #results { display: none; }
+  .partial-banner {
+    background: var(--stop-bg);
+    border: 1px solid var(--stop);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .partial-banner strong { color: var(--stop); display: block; margin-bottom: 6px; font-size: 0.95rem; }
+  .partial-banner p { margin: 4px 0; font-size: 0.85rem; }
+  .mti-summary {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+  .panel h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.mono, .mono { font-family: var(--mono); }
+  .diag-item {
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+  }
+  .diag-item.severity-stop { background: var(--stop-bg); border-color: var(--stop); }
+  .diag-item.severity-diagnostic { background: var(--diag-bg); border-color: var(--diag); }
+  .diag-item .diag-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.75rem; margin-bottom: 4px; }
+  .diag-item .diag-code { font-weight: 600; }
+  .severity-stop .diag-code { color: var(--stop); }
+  .severity-diagnostic .diag-code { color: var(--diag); }
+  .empty-note { color: var(--muted); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>ISO 8583 Message Decoder</h1>
+<p class="subtitle">Paste a raw message, pick its encoding, decode. A message that fails to decode is not an error &mdash; the diagnostics panel is the point.</p>
+
+<fieldset>
+  <legend>Message</legend>
+  <textarea id="raw-input" placeholder="Paste a raw ISO 8583 message (ASCII text, or a hex dump for binary mode)"></textarea>
+
+  <div class="row">
+    <div class="field">
+      <label>Encoding &mdash; you must choose, nothing is assumed</label>
+      <div class="radio-group">
+        <label><input type="radio" name="encoding" value="ascii"> ASCII</label>
+        <label><input type="radio" name="encoding" value="binary"> Binary</label>
+      </div>
+      <span id="encoding-error">Pick an encoding before decoding.</span>
+    </div>
+
+    <div class="field">
+      <label for="spec-select">Field spec (auto-selected from the MTI version digit)</label>
+      <select id="spec-select" disabled></select>
+    </div>
+
+    <div class="field">
+      <label for="sample-select">Load a sample</label>
+      <select id="sample-select">
+        <option value="">-- choose a sample --</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label><input type="checkbox" id="reveal-toggle"> Reveal masked/redacted values</label>
+      <span class="reveal-line">Off by default and reset on every page load. Only affects this one request &mdash; nothing is remembered between decodes.</span>
+    </div>
+
+    <div class="field">
+      <button id="decode-btn">Decode</button>
+    </div>
+  </div>
+  <p id="form-error"></p>
+</fieldset>
+
+<div id="results">
+  <div id="partial-banner" class="partial-banner" style="display:none;">
+    <strong>Decoding stopped partway through</strong>
+    <p id="partial-where"></p>
+    <p id="partial-why"></p>
+    <p>Fields after this point were <strong>never attempted</strong> &mdash; that's different from being absent from the message. Nothing past the stop point could be trusted, so nothing past it was read.</p>
+  </div>
+
+  <p class="mti-summary" id="mti-summary"></p>
+
+  <div class="panels">
+    <div class="panel">
+      <h2>Decoded fields</h2>
+      <table id="fields-table">
+        <thead><tr><th>#</th><th>Name</th><th>Value</th><th>Explanation</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty-note" id="fields-empty" style="display:none;">No fields were decoded.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Diagnostics</h2>
+      <div id="diagnostics-list"></div>
+      <p class="empty-note" id="diagnostics-empty" style="display:none;">Clean decode &mdash; no diagnostics.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const el = (id) => document.getElementById(id);
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+async function loadSpecs() {
+  const res = await fetch('/specs');
+  const specs = await res.json();
+  const select = el('spec-select');
+  select.innerHTML = specs
+    .map((s) => `<option value="${escapeHtml(s.version_digit)}">${escapeHtml(s.name)} (${escapeHtml(s.variant)})</option>`)
+    .join('');
+}
+
+async function loadSamples() {
+  const res = await fetch('/samples');
+  const samples = await res.json();
+  const select = el('sample-select');
+  for (const s of samples) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.transaction_type} — ${s.description}`;
+    opt.dataset.raw = s.raw;
+    opt.dataset.encoding = s.encoding;
+    select.appendChild(opt);
+  }
+  select.addEventListener('change', () => {
+    const opt = select.selectedOptions[0];
+    if (!opt || !opt.value) return;
+    el('raw-input').value = opt.dataset.raw;
+    const radios = document.querySelectorAll('input[name="encoding"]');
+    radios.forEach((r) => { r.checked = r.value === opt.dataset.encoding; });
+    el('encoding-error').style.display = 'none';
+  });
+}
+
+function getSelectedEncoding() {
+  const checked = document.querySelector('input[name="encoding"]:checked');
+  return checked ? checked.value : null;
+}
+
+function renderPartialBanner(data) {
+  const banner = el('partial-banner');
+  if (!data.partial) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'block';
+  el('partial-where').textContent = `Stopped at: ${data.stopped_at ?? 'unknown'}`;
+  const reason = data.diagnostics.find((d) => d.code === data.reason_code);
+  el('partial-why').textContent = reason
+    ? `Why: ${reason.message} (byte offset ${reason.byte_offset ?? 'n/a'})`
+    : `Reason code: ${data.reason_code ?? 'unknown'}`;
+}
+
+function renderMti(data) {
+  const line = el('mti-summary');
+  if (!data.mti) {
+    line.textContent = 'MTI could not be read at all.';
+    return;
+  }
+  line.textContent = `MTI ${data.mti.raw}: ${data.mti.summary}`;
+}
+
+function renderFields(data) {
+  const tbody = document.querySelector('#fields-table tbody');
+  tbody.innerHTML = '';
+  el('fields-empty').style.display = data.fields.length ? 'none' : 'block';
+  for (const f of data.fields) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${f.field_number}</td>
+      <td>${escapeHtml(f.name)}</td>
+      <td class="mono">${escapeHtml(f.raw)}</td>
+      <td>${f.interpreted ? escapeHtml(f.interpreted) : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderDiagnostics(data) {
+  const list = el('diagnostics-list');
+  list.innerHTML = '';
+  el('diagnostics-empty').style.display = data.diagnostics.length ? 'none' : 'block';
+  for (const d of data.diagnostics) {
+    const div = document.createElement('div');
+    div.className = `diag-item severity-${d.severity}`;
+    div.innerHTML = `
+      <div class="diag-head">
+        <span class="diag-code">${escapeHtml(d.code)}</span>
+        <span>${d.field_number !== null ? 'field ' + d.field_number : ''} ${d.byte_offset !== null ? '&middot; byte ' + d.byte_offset : ''}</span>
+      </div>
+      <div>${escapeHtml(d.message)}</div>
+    `;
+    list.appendChild(div);
+  }
+}
+
+function selectSpecUsed(data) {
+  const select = el('spec-select');
+  if (data.mti) {
+    select.value = data.mti.version.digit;
+  }
+}
+
+async function decode() {
+  el('form-error').style.display = 'none';
+  const encoding = getSelectedEncoding();
+  if (!encoding) {
+    el('encoding-error').style.display = 'inline';
+    return;
+  }
+  el('encoding-error').style.display = 'none';
+
+  const body = {
+    raw: el('raw-input').value,
+    encoding,
+    explain: true,
+    reveal: el('reveal-toggle').checked,
+  };
+
+  let res;
+  try {
+    res = await fetch('/decode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    el('form-error').textContent = 'Request failed: could not reach the API.';
+    el('form-error').style.display = 'block';
+    return;
+  }
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = JSON.stringify(await res.json()); } catch (e) { /* ignore */ }
+    el('form-error').textContent = `Request rejected (${res.status}): ${detail}`;
+    el('form-error').style.display = 'block';
+    el('results').style.display = 'none';
+    return;
+  }
+
+  const data = await res.json();
+  el('results').style.display = 'block';
+  renderPartialBanner(data);
+  renderMti(data);
+  renderFields(data);
+  renderDiagnostics(data);
+  selectSpecUsed(data);
+}
+
+el('decode-btn').addEventListener('click', decode);
+
+loadSpecs();
+loadSamples();
+</script>
+</body>
+</html>

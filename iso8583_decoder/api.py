@@ -36,14 +36,21 @@ internally regardless of the reveal setting used for display.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from .diagnostics import Diagnostic, DiagnosticCode
 from .explain import explain_fields
-from .mti import MtiDecodeResult, MtiFormatError, UnsupportedVersionError, load_spec_for_version
+from .mti import (
+    VERSION_SPEC_FILES,
+    MtiDecodeResult,
+    MtiFormatError,
+    UnsupportedVersionError,
+    load_spec_for_version,
+)
 from .parser import decode_message
 from .render import mask_value
 from .samples import Sample, get_sample, load_samples
@@ -58,10 +65,12 @@ from .schemas import (
     MtiResponse,
     SampleExpectedResponse,
     SampleResponse,
+    SpecResponse,
 )
 
 MAX_BODY_BYTES = 64 * 1024
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+INDEX_HTML_PATH = Path(__file__).resolve().parent.parent / "web" / "index.html"
 
 logger = logging.getLogger("iso8583_decoder.api")
 
@@ -142,8 +151,9 @@ def _decode(request: DecodeRequest) -> DecodeResponse:
     for field_number, raw_value in result.decoded_so_far.items():
         field_spec = spec.fields.get(field_number)
         display_value = mask_value(field_spec, raw_value, reveal=request.reveal) if field_spec else raw_value
+        name = field_spec.name if field_spec else f"field {field_number}"
         interpreted = explained.fields[field_number].interpreted if explained else None
-        fields.append(FieldResponse(field_number=field_number, raw=display_value, interpreted=interpreted))
+        fields.append(FieldResponse(field_number=field_number, name=name, raw=display_value, interpreted=interpreted))
     fields.sort(key=lambda f: f.field_number)
 
     diagnostics = [_diagnostic_response(d) for d in result.diagnostics]
@@ -225,9 +235,21 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=f"no sample with id {sample_id!r}")
         return _sample_response(sample)
 
+    @app.get("/specs", response_model=list[SpecResponse])
+    def specs_endpoint() -> list[SpecResponse]:
+        specs = []
+        for digit in VERSION_SPEC_FILES:
+            spec = load_spec_for_version(digit)
+            specs.append(SpecResponse(version_digit=digit, variant=spec.variant, name=spec.name))
+        return specs
+
     @app.get("/health", response_model=HealthResponse)
     def health_endpoint() -> HealthResponse:
         return HealthResponse()
+
+    @app.get("/", include_in_schema=False)
+    def index_page() -> FileResponse:
+        return FileResponse(INDEX_HTML_PATH, media_type="text/html")
 
     return app
 

@@ -44,6 +44,7 @@ class DiagnosticResponse(BaseModel):
 
 class FieldResponse(BaseModel):
     field_number: int
+    name: str
     raw: str  # display value: masked/redacted per field sensitivity unless reveal=true was requested
     interpreted: str | None = None  # only populated when the request asked for explain=true
 
@@ -77,6 +78,12 @@ class SampleResponse(BaseModel):
     encoding: str
     raw: str
     expected: SampleExpectedResponse
+
+
+class SpecResponse(BaseModel):
+    version_digit: str
+    variant: str
+    name: str
 
 
 class HealthResponse(BaseModel):
