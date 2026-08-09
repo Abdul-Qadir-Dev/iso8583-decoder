@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "iso8583-decoder"
 version = "0.1.0"
 description = "ISO 8583 payment message decoder with plain-language diagnostics, built for payments support and fintech troubleshooting."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 # Runtime dependencies only -- checked against actual imports in
 # iso8583_decoder/*.py, not copied from requirements.txt wholesale.
 # uvicorn isn't imported by the package itself (Vercel hosts the ASGI

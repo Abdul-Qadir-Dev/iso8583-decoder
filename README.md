@@ -87,7 +87,7 @@ a request parameter rather than a setting someone can forget is on.
 
 ## Setup
 
-Requires Python 3.11.
+Requires Python 3.12.
 
 ```bash
 git clone https://github.com/Abdul-Qadir-Dev/iso8583-decoder.git
@@ -150,9 +150,12 @@ entrypoint file.
 
 Vercel's Python runtime installs dependencies with `uv`, reading them from
 `pyproject.toml`'s `[project.dependencies]` -- not from `requirements.txt`,
-which Vercel never looks at. `.python-version` pins the build to 3.11, the
-same version CI runs; without it Vercel defaults to a newer Python than
-this project is tested against. The `Dockerfile` stays in the repo for
+which Vercel never looks at. `.python-version` pins the build to 3.12: not
+a preference, a requirement -- Vercel's own runtime package
+(`vercel-runtime`) needs Python >=3.12, so anything short of that fails
+the build. CI and the Dockerfile both run 3.12 too, for the same reason
+this project ships one version, not a version it happens to test on. The
+`Dockerfile` stays in the repo for
 local use and self-hosting -- it isn't used by the Vercel deployment.
 
 Steps to run yourself (account creation isn't something this tool does on
