@@ -10,6 +10,11 @@ reversal, and network-management message traffic.
 
 **Live demo:** [iso8583-decoder.vercel.app](https://iso8583-decoder.vercel.app)
 
+Try the demo:
+- Load `auth_request_0100_ascii` and decode it -- a clean, multi-field authorization request.
+- Field 2 (PAN) renders masked (`411111******1111`) by default -- the Reveal toggle shows why that's opt-in, not automatic.
+- Load `malformed_invalid_bcd_length_prefix` to see a partial result: `stopped_at` and the stop reason, not a silent failure.
+
 ![Decoded ISO 8583 message with a diagnostic visible in the UI](docs/screenshot.png)
 
 ## Architecture
@@ -154,22 +159,13 @@ a preference, a requirement -- Vercel's own runtime package
 (`vercel-runtime`) needs Python >=3.12, so anything short of that fails
 the build. CI and the Dockerfile both run 3.12 too, for the same reason
 this project ships one version, not a version it happens to test on. The
-`Dockerfile` stays in the repo for
-local use and self-hosting -- it isn't used by the Vercel deployment.
+`Dockerfile` stays in the repo for local use and self-hosting -- it isn't
+used by the Vercel deployment.
 
-Steps to run yourself (account creation isn't something this tool does on
-your behalf):
-
-1. Push this repo to GitHub, if it isn't already.
-2. Create a free account at [vercel.com](https://vercel.com).
-3. **Add New** -> **Project** -> import this GitHub repo.
-4. Vercel should detect it as a Python/FastAPI project automatically from
-   `requirements.txt` and `pyproject.toml`. Leave build/output settings on
-   their defaults.
-5. Deploy, and wait for the build to finish.
-6. Visit `https://<your-project>.vercel.app/health` and confirm it returns
-   `{"status": "ok"}`, then check `/` to confirm the UI loads too.
-7. Paste that URL into the "Live demo" line near the top of this README.
+Deploys automatically from the connected GitHub repo: a push to `main`
+triggers a new build, Vercel resolves the entrypoint from
+`pyproject.toml`'s `[tool.vercel]` table, and the deployed function serves
+both the API and the static UI from that single build.
 
 ## Provenance
 
