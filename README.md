@@ -8,8 +8,7 @@ reversal, and network-management message traffic.
 [![Tests](https://github.com/Abdul-Qadir-Dev/iso8583-decoder/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdul-Qadir-Dev/iso8583-decoder/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Live demo:** _not deployed yet -- see [Deploy](#deploy) below_
-<!-- TODO: replace the line above with the deployed URL once it exists -->
+**Live demo:** [iso8583-decoder.vercel.app](https://iso8583-decoder.vercel.app)
 
 ![Decoded ISO 8583 message with a diagnostic visible in the UI](docs/screenshot.png)
 
